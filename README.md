@@ -4,6 +4,8 @@ This framework ontop of [telepot](https://github.com/nickoala/telepot) is intend
 
 ## A simple example
 
+./Bot.py
+
 ```python
 from marvin import Marvin
 
@@ -13,6 +15,18 @@ bot = Marvin()
 def start():
     return "Hello, new user, how can I help you?"
 
+```
+
+./config/Configuration.toml
+
+```ini
+[general]
+# Sets the log level for stdout
+logging = "DEBUG"
+
+[bot]
+# The Bot API token
+token = "The token you got by the botfather"
 ```
 
 ## Installation
