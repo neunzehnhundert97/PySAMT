@@ -5,7 +5,7 @@ from inspect import iscoroutinefunction
 from os import path
 from typing import Dict, Callable, Any
 
-import aiotask_context as context
+import aiotask_context as _context
 import telepot
 import telepot.aio.delegate
 import toml
@@ -25,10 +25,14 @@ def _load_configuration(filename: str) -> dict:
     return toml.load("{}/config/{}.toml".format(script_path, filename))
 
 
-message_context = context
+# Wrap the async context
+context = _context
 
 
 class Marvin:
+    """
+    The main class of this framework
+    """
 
     def __init__(self):
         """
@@ -61,7 +65,7 @@ class Marvin:
         loop = asyncio.get_event_loop()
 
         # Changes its task factory to use the async context provided by aiotask_context
-        loop.set_task_factory(context.copying_task_factory)
+        loop.set_task_factory(_context.copying_task_factory)
 
         # Creates the forever running bot listening function as task
         loop.create_task(MessageLoop(self._bot).run_forever(timeout=10))
@@ -160,6 +164,18 @@ class Marvin:
         _Session.default_answer = func
         return func
 
+    @staticmethod
+    def default_sticker_answer(func: Callable) -> Callable:
+        """
+        A decorator for the function to be called if no other handler matches
+        :param func: The function to be registered
+        :return: The unchanged function
+        """
+
+        # Remember the function
+        _Session.default_sticker_answer = func
+        return func
+
 
 class _Session(telepot.aio.helper.UserHandler):
     """
@@ -189,6 +205,9 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Extract the user of the default arguments
         self.user = User(args[0][1]['from'])
+
+        # Create dictionary to use as persistent storage
+        self.storage = dict()
 
         if _Session.config.get('language_feature', False):
             self.language = self.load_language()
@@ -241,8 +260,9 @@ class _Session(telepot.aio.helper.UserHandler):
         logging.debug("Message by {}: \"{}\"".format(self.user, text))
 
         # Prepare context for the user to access if needed
-        context.set("message", Message(msg))
-        context.set("user", self.user)
+        _context.set('message', Message(msg))
+        _context.set('user', self.user)
+        _context.set('storage', self.storage)
 
         # Check, if the message is covered by one of the known simple routes
         if text in _Session.simple_routes:
@@ -253,7 +273,7 @@ class _Session(telepot.aio.helper.UserHandler):
             func = _Session.regex_routes[text]
 
         # Route implicitly, if allowed
-        elif text in _Session.lang and _Session.implicit_routing:
+        elif _Session.implicit_routing and text in _Session.lang:
             await self.send(_Session.lang[text])
             return
 

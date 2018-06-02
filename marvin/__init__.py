@@ -1,2 +1,2 @@
-from .marvin import Marvin, message_context
+from .marvin import Marvin, context
 from .helper import *

@@ -1,5 +1,8 @@
 import re
 from datetime import datetime
+from typing import Hashable, Any
+
+import aiotask_context
 
 
 class User:
@@ -32,6 +35,42 @@ class Message:
         # Safe all usefull information as attributes
         self.date = datetime.fromtimestamp(msg['date'])
         self.text = msg.get('text', None)
+
+
+class Sticker:
+    """
+    A wrapper around the sticker information which are by default contained in a dictionary
+    """
+
+    def __init__(self, sticker: dict):
+        # Safe all usefull information as attributes
+        self.emoji = sticker['emoji']
+        self.file_id = sticker['file_id']
+        self.file_size = sticker['file_size']
+        self.heigth = sticker['height']
+        self.set_name = sticker['set_name']
+
+
+class Context:
+    """
+    A wrapper around the aiotask_context to use additional functions
+    """
+
+    @staticmethod
+    def get(key: Hashable) -> Any:
+        return aiotask_context.get(key)
+
+    @staticmethod
+    def set(key: Hashable, value: Any) -> None:
+        aiotask_context.set(key, value)
+
+    @staticmethod
+    def __getitem__(key: Hashable) -> Any:
+        return aiotask_context.get(key)
+
+    @staticmethod
+    def __setitem__(key: Hashable, value: Any) -> Any:
+        aiotask_context.set(key, value)
 
 
 # Source: https://djangosnippets.org/snippets/309/
