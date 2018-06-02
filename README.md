@@ -4,7 +4,7 @@ This framework ontop of [telepot](https://github.com/nickoala/telepot) is intend
 
 ## A simple example
 
-./Bot.py
+Bot.py
 
 ```python
 from marvin import Marvin
@@ -14,10 +14,13 @@ bot = Marvin()
 @bot.answer("/start")
 def start():
     return "Hello, new user, how can I help you?"
+    
+if __name__ == "__main__":
+    bot.listen()
 
 ```
 
-./config/Configuration.toml
+config/Configuration.toml
 
 ```ini
 [general]

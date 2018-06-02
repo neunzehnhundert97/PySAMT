@@ -41,7 +41,9 @@ class Marvin:
         _Session.config = self._config['bot']
 
         # Read language files
-        _Session.lang = _load_configuration("lang/default")
+        if self._config_value('bot', 'implicit_routing', default=False) or self._config_value('bot', 'language_feature',
+                                                                                              default=False):
+            _Session.lang = _load_configuration("lang/default")
 
         # Initialize logger
         self._configure_logger()
