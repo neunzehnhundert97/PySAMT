@@ -40,6 +40,9 @@ class Marvin:
         _Session.implicit_routing = self._config_value('bot', 'implicit_routing', default=False)
         _Session.config = self._config['bot']
 
+        # Read language files
+        _Session.lang = _load_configuration("lang/default")
+
         # Initialize logger
         self._configure_logger()
 
@@ -166,8 +169,8 @@ class _Session(telepot.aio.helper.UserHandler):
     simple_routes: Dict[str, Callable] = dict()
     regex_routes: RegExDict = RegExDict()
 
-    # Read language files
-    lang = _load_configuration("lang/default")
+    # Language files
+    lang = None
 
     # The relevant parts of the configuration, will be injected by the main classes constructor
     config = None
