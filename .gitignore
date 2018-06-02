@@ -1,0 +1,8 @@
+# IDE specific files
+.idea/*
+
+# Tests
+tests/*
+
+# Python file
+*.pyc
