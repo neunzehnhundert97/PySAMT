@@ -1,6 +1,6 @@
 # Marvin
 
-This framework ontop of [telepot](https://github.com/nickoala/telepot) is intended to ease the creation of simple Telegram chat bots. With a syntax as seen in web frameworks like [flask](https://github.com/pallets/flask), writing the bot will only be about defining what the bot answer to certain message, skipping the lower levels involved.
+This framework on top of [telepot](https://github.com/nickoala/telepot) is intended to ease the creation of simple Telegram chat bots. With a syntax as seen in web frameworks like [flask](https://github.com/pallets/flask), writing the bot will only be about defining what the bot will answer to certain messages, skipping the lower levels involved.
 
 ## A simple example
 
@@ -38,4 +38,4 @@ The package is currently not (yet) available on PyPI, but you may download the r
 
 ## Notes
 
-The project is currently still under construction, so many things are intended to be added or can change from commit to commit. If encounter bugs (which seems likely to me), want to suggest a new feature or have a general comment, feel free to contact me.
+The project is currently still under construction, so many things are intended to be added or can change from commit to commit. If you encounter bugs (which seems likely to me), want to suggest a new feature or have a general comment, feel free to contact me.
