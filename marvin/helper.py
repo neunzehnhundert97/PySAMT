@@ -57,20 +57,36 @@ class Context:
     """
 
     @staticmethod
-    def get(key: Hashable) -> Any:
-        return aiotask_context.get(key)
+    def get(key: Hashable, default=None) -> Any:
+        """
+        Retrieves an value of the async context or the session storage in this order
+        :param key: The key to get
+        :param default: The value to return, if nothing is found
+        :return:
+        """
+
+        # First try to find the value in the context
+        value = aiotask_context.get(key)
+
+        # If not found, try to find it in the session storage
+        if value is None:
+            value = aiotask_context.get('_<[storage]>_').get(key, default)
+
+        return value
 
     @staticmethod
     def set(key: Hashable, value: Any) -> None:
-        aiotask_context.set(key, value)
+        """
+        Puts the given key value pair into the session storage
+        :param key: The key for the value to be associated with
+        :param value: The value to be inserted
+        """
 
-    @staticmethod
-    def __getitem__(key: Hashable) -> Any:
-        return aiotask_context.get(key)
-
-    @staticmethod
-    def __setitem__(key: Hashable, value: Any) -> Any:
-        aiotask_context.set(key, value)
+        # Check for a conflict
+        if aiotask_context.get(key) is not None:
+            raise KeyError("This key is occupied by the framework")
+        else:
+            aiotask_context.get('_<[storage]>_')[key] = value
 
 
 # Source: https://djangosnippets.org/snippets/309/

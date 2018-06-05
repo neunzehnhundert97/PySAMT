@@ -13,18 +13,6 @@ from telepot.aio.loop import MessageLoop
 
 from marvin.helper import User, RegExDict, Message
 
-
-def _load_configuration(filename: str) -> dict:
-    """
-    Loads the main configuration file from disk
-    :param filename: The name of the user configuration file
-    :return: The configuration as a dictionary
-    """
-
-    script_path = path.dirname(path.realpath(sys.argv[0]))
-    return toml.load("{}/config/{}.toml".format(script_path, filename))
-
-
 # Wrap the async context
 context = _context
 
@@ -34,20 +22,20 @@ class Marvin:
     The main class of this framework
     """
 
+    _config = None
+
     def __init__(self):
         """
         Initialize the framework using the configuration file(s)
         """
 
         # Read configuration
-        self._config = _load_configuration("Configuration")
-        _Session.implicit_routing = self._config_value('bot', 'implicit_routing', default=False)
-        _Session.config = self._config['bot']
+        Marvin._config = Marvin._load_configuration("Configuration")
 
         # Read language files
-        if self._config_value('bot', 'implicit_routing', default=False) or self._config_value('bot', 'language_feature',
-                                                                                              default=False):
-            _Session.lang = _load_configuration("lang/default")
+        if Marvin._config_value('bot', 'implicit_routing', default=False) \
+                or Marvin._config_value('bot', 'language_feature', default=False):
+            _Session.language = Marvin._load_configuration("Languages")
 
         # Initialize logger
         self._configure_logger()
@@ -78,35 +66,13 @@ class Marvin:
         Creates the bot using the telpot API
         """
 
-        self._bot = telepot.aio.DelegatorBot(self._config_value('bot', 'token'), [
+        self._bot = telepot.aio.DelegatorBot(Marvin._config_value('bot', 'token'), [
             telepot.aio.delegate.pave_event_space()(
                 telepot.aio.delegate.per_chat_id(types=["private"]),
                 telepot.aio.delegate.create_open,
                 _Session,
-                timeout=self._config_value('bot', 'timeout', default=10)),
+                timeout=Marvin._config_value('bot', 'timeout', default=31536000)),
         ])
-
-    def _config_value(self, *keys, default: Any = None) -> Any:
-        """
-        Safely accesses any key in the configuration and returns a default value if it is not found
-        :param keys: The keys to the config dictionary
-        :param default: The value to return if nothing is found
-        :return: Either the desired or the default value
-        """
-
-        # Traverse through the dictionaries
-        step = self._config
-        for key in keys:
-            try:
-
-                # Try to go one step deeper
-                step = step[key]
-
-            # A keyerror will abort the operation and return the default value
-            except KeyError:
-                return default
-
-        return step
 
     def _configure_logger(self) -> None:
         """
@@ -119,7 +85,7 @@ class Marvin:
                  "warning": logging.WARNING,
                  "error": logging.ERROR,
                  "critical": logging.CRITICAL
-                 }.get(self._config_value('general', 'logging').lower(), logging.WARNING)
+                 }.get(Marvin._config_value('general', 'logging').lower(), logging.WARNING)
 
         # Configure the logger
         logging.basicConfig(level=level,
@@ -176,6 +142,40 @@ class Marvin:
         _Session.default_sticker_answer = func
         return func
 
+    @staticmethod
+    def _load_configuration(filename: str) -> dict:
+        """
+        Loads the main configuration file from disk
+        :param filename: The name of the user configuration file
+        :return: The configuration as a dictionary
+        """
+
+        script_path = path.dirname(path.realpath(sys.argv[0]))
+        return toml.load("{}/config/{}.toml".format(script_path, filename))
+
+    @staticmethod
+    def _config_value(*keys, default: Any = None) -> Any:
+        """
+        Safely accesses any key in the configuration and returns a default value if it is not found
+        :param keys: The keys to the config dictionary
+        :param default: The value to return if nothing is found
+        :return: Either the desired or the default value
+        """
+
+        # Traverse through the dictionaries
+        step = Marvin._config
+        for key in keys:
+            try:
+
+                # Try to go one step deeper
+                step = step[key]
+
+            # A keyerror will abort the operation and return the default value
+            except KeyError:
+                return default
+
+        return step
+
 
 class _Session(telepot.aio.helper.UserHandler):
     """
@@ -188,10 +188,7 @@ class _Session(telepot.aio.helper.UserHandler):
     regex_routes: RegExDict = RegExDict()
 
     # Language files
-    lang = None
-
-    # The relevant parts of the configuration, will be injected by the main classes constructor
-    config = None
+    language = None
 
     def __init__(self, *args, **kwargs):
         """
@@ -209,24 +206,15 @@ class _Session(telepot.aio.helper.UserHandler):
         # Create dictionary to use as persistent storage
         self.storage = dict()
 
-        if _Session.config.get('language_feature', False):
-            self.language = self.load_language()
-
         logging.info(
             "User {} connected".format(self.user))
-
-    def load_language(self) -> dict:
-        """
-
-        :return:
-        """
-        return _Session.lang
 
     async def on_close(self, timeout: int) -> None:
         """
         The function which will be called by telepot when the connection times out. Unused.
         :param timeout: The length of the exceeded timeout
         """
+        logging.info("User {} timed out".format(self.user))
 
         pass
 
@@ -256,13 +244,12 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         text = msg['text']
-
         logging.debug("Message by {}: \"{}\"".format(self.user, text))
 
         # Prepare context for the user to access if needed
         _context.set('message', Message(msg))
         _context.set('user', self.user)
-        _context.set('storage', self.storage)
+        _context.set('_<[storage]>_', self.storage)
 
         # Check, if the message is covered by one of the known simple routes
         if text in _Session.simple_routes:
@@ -273,7 +260,7 @@ class _Session(telepot.aio.helper.UserHandler):
             func = _Session.regex_routes[text]
 
         # Route implicitly, if allowed
-        elif _Session.implicit_routing and text in _Session.lang:
+        elif Marvin._config_value('bot', 'implicit_routing', default=False) and text in _Session.lang:
             await self.send(_Session.lang[text])
             return
 
@@ -288,8 +275,13 @@ class _Session(telepot.aio.helper.UserHandler):
         else:
             answer = func()
 
+        # A none answer wil  be seen as order to stay silent
+        if answer is None:
+            logging.info("No answer was given")
+            return
+
         # If the language feature is wanted, it ist now applied
-        if _Session.config.get('language_feature', False):
+        if Marvin._config_value('bot', 'language_feature', default=False):
 
             # Convert answer into an list, if not already, to easy handling
             if not isinstance(answer, (tuple, list)):
@@ -323,23 +315,29 @@ class _Session(telepot.aio.helper.UserHandler):
         :param format_content: The format string contents
         """
 
-        # Try to load the answer string
+        # The language code should be something like de, but could be also like de_DE or non-existent
+        lang_code = self.user.language_code.split('_')[0].lower()
+
         try:
-            answer: str = self.language[key]
+            answer: str = _Session.language[lang_code][key]
+        except KeyError:
+            # Try to load the answer string
+            try:
+                answer: str = _Session.language['default'][key]
 
-        # Catch the keyerror which might be thrown
-        except KeyError as e:
+            # Catch the keyerror which might be thrown
+            except KeyError as e:
 
-            # In strict mode, raise the error again, which will terminate the application
-            if _Session.config.get('strict_mode', False):
-                logging.critical('Language key "{}" not found!'.format(key))
-                raise e
+                # In strict mode, raise the error again, which will terminate the application
+                if Marvin._config_value('strict_mode', default=False):
+                    logging.critical('Language key "{}" not found!'.format(key))
+                    raise e
 
-            # In non-strict mode just send the user the key as answer
-            else:
-                logging.info('Language key "{}" not found, sending itself instead'.format(key))
-                await self.send(key)
-                return
+                # In non-strict mode just send the user the key as answer
+                else:
+                    logging.info('Language key "{}" not found, sending itself instead'.format(key))
+                    await self.send(key)
+                    return
 
         # Apply formatting
         if format_content is not None and len(format_content) > 0:
@@ -355,7 +353,11 @@ class _Session(telepot.aio.helper.UserHandler):
         :param msg: The message to be sent
         """
 
-        # Check, which kind of sender method is appropiate
+        # Cast the message to a string to circumvent erros
+        if not isinstance(msg, str):
+            msg = str(msg)
+
+        # Create dictionary to switch between functions
         method = {
             'sticker': self.sender.sendSticker,
             'photo': self.send_photo,
@@ -365,6 +367,7 @@ class _Session(telepot.aio.helper.UserHandler):
             'voice': self.send_voice
         }
 
+        # Try to detect a relevant command
         command = ""
         payload = None
         if ":" in msg:
@@ -372,24 +375,50 @@ class _Session(telepot.aio.helper.UserHandler):
 
         func = method.get(command, None)
 
+        # Call the appropiate function
         if func is not None:
             await method[command](payload)
         else:
-            await self.sender.sendMessage(msg, parse_mode=_Session.config.get('markup', None))
+            await self.sender.sendMessage(msg, parse_mode=Marvin._config_value('bot', 'markup', default=None))
 
     async def send_photo(self, file):
+        """
+        Sends a photo to the user
+        :param file: A path either relative or absolute to the file to send
+        """
+
         await self.sender.sendPhoto(open(file, 'rb'))
 
     async def send_document(self, file):
+        """
+        Sends a document to the user
+        :param file: A path either relative or absolute to the file to send
+        """
+
         await self.sender.sendDocument(open(file, 'rb'))
 
     async def send_audio(self, file):
+        """
+        Sends a audio to the user
+        :param file: A path either relative or absolute to the file to send
+        """
+
         await self.sender.sendAudio(open(file, 'rb'))
 
     async def send_voice(self, file):
+        """
+        Sends a voice to the user
+        :param file: A path either relative or absolute to the file to send
+        """
+
         await self.sender.sendVoice(open(file, 'rb'))
 
     async def send_video(self, file):
+        """
+        Sends a video to the user
+        :param file: A path either relative or absolute to the file to send
+        """
+
         await self.sender.sendVideo(open(file, 'rb'))
 
     async def default_answer(self) -> str:
