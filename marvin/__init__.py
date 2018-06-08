@@ -1,2 +1,2 @@
-from .marvin import Marvin, context
+from .marvin import Marvin
 from .helper import *
