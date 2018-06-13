@@ -60,7 +60,12 @@ class Marvin:
 
         # Read configuration
         global _config
-        _config = _load_configuration("Configuration")
+        try:
+            _config = _load_configuration("Configuration")
+        except FileNotFoundError:
+            logging.critical("The configuration file could not be found. Please make sure there is a file called " +
+                             "Configuration.toml in the directory config.")
+            quit(-1)
 
         # Read language files
         if _config_value('bot', 'implicit_routing', default=False) \
@@ -76,7 +81,7 @@ class Marvin:
 
     def listen(self) -> None:
         """
-        Activates the bot by running it in a neverending asynchronous loop
+        Activates the bot by running it in a never ending asynchronous loop
         """
 
         # Creates an event loop
@@ -93,7 +98,7 @@ class Marvin:
 
     def _create_bot(self) -> None:
         """
-        Creates the bot using the telpot API
+        Creates the bot using the telepot API
         """
 
         self._bot = telepot.aio.DelegatorBot(_config_value('bot', 'token'), [
@@ -107,7 +112,7 @@ class Marvin:
     @staticmethod
     def _configure_logger() -> None:
         """
-        Configures the default python loggin module
+        Configures the default python logging module
         """
 
         # Convert the written level into the numeric one
@@ -116,7 +121,7 @@ class Marvin:
                  "warning": logging.WARNING,
                  "error": logging.ERROR,
                  "critical": logging.CRITICAL
-                 }.get(_config_value('general', 'logging').lower(), logging.WARNING)
+                 }.get(_config_value('general', 'logging', default="error").lower(), logging.WARNING)
 
         # Configure the logger
         logging.basicConfig(level=level,
@@ -291,7 +296,7 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         # Extract the emojis associated with the sticker
-        if _Session.config.get('extract_emojis', False):
+        if _config_value('bot', 'extract_emojis', default=False):
             logging.debug("Sticker by {}, will be dismantled".format(self.user))
             msg['text'] = msg['sticker']['emoji']
             await self.handle_text_message(msg)
