@@ -3,15 +3,16 @@ import logging
 import sys
 from inspect import iscoroutinefunction
 from os import path
-from typing import Dict, Callable, Any
+from typing import Dict, Callable, Any, Tuple
 
 import aiotask_context as _context
+import parse
 import telepot
 import telepot.aio.delegate
 import toml
 from telepot.aio.loop import MessageLoop
 
-from marvin.helper import User, RegExDict, Message
+from marvin.helper import User, RegExDict, Message, Mode, ParsingDict
 
 
 def _load_configuration(filename: str) -> dict:
@@ -129,11 +130,11 @@ class Marvin:
                             format="[%(asctime)s] %(message)s")
 
     @staticmethod
-    def answer(message: str, regex: bool = False) -> Callable:
+    def answer(message: str, mode: Mode = Mode.DEFAULT) -> Callable:
         """
         The wrapper for the inner decorator
         :param message: The message to react upon
-        :param regex: If the given string should be treated as regular expression
+        :param mode: The mode by which to interpret the given string
         :return: The decorator itself
         """
 
@@ -145,10 +146,13 @@ class Marvin:
             """
 
             # Add the function keyed by the given message
-            if not regex:
-                _Session.simple_routes[message] = func
-            else:
+            if mode == Mode.REGEX:
                 _Session.regex_routes[message] = func
+            if mode == Mode.PARSE:
+                _Session.parse_routes[message] = func
+            else:
+                _Session.simple_routes[message] = func
+
             return func
 
         # Return the decorator
@@ -187,6 +191,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
     # The routing dictionaries
     simple_routes: Dict[str, Callable] = dict()
+    parse_routes: ParsingDict = ParsingDict()
     regex_routes: RegExDict = RegExDict()
 
     # Language files
@@ -253,9 +258,17 @@ class _Session(telepot.aio.helper.UserHandler):
         _context.set('user', self.user)
         _context.set('_<[storage]>_', self.storage)
 
+        args: Tuple = ()
+        kwargs: Dict = {}
+
         # Check, if the message is covered by one of the known simple routes
         if text in _Session.simple_routes:
             func = _Session.simple_routes[text]
+
+        # Check, if the message is covered by one of the known parse routes
+        elif text in _Session.parse_routes:
+            func, matching = _Session.parse_routes[text]
+            kwargs = matching.named
 
         # Check, if the message is covered by one of the known regex routes
         elif text in _Session.regex_routes:
@@ -268,9 +281,9 @@ class _Session(telepot.aio.helper.UserHandler):
         # The user of the framework can choose freely between synchronous and asynchronous programming
         # So the program decides upon the signature how to call the function
         if iscoroutinefunction(func):
-            answer = await func()
+            answer = await func(*args, **kwargs)
         else:
-            answer = func()
+            answer = func(*args, **kwargs)
 
         # A none answer wil  be seen as order to stay silent
         if answer is None:

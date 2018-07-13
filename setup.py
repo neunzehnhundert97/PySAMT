@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="marvin",
-    version=0.1,
+    version=0.2,
     author="neunzehnhundert97",
     packages=["marvin"],
     classifiers=[
@@ -17,6 +17,6 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="MIT",
-    install_requires=['toml', 'telepot', 'aiotask_context'],
+    install_requires=['toml', 'telepot', 'aiotask_context', 'parse'],
     url="https://github.com/neunzehnhundert97/marvin-telegram-bot"
 )

@@ -1,6 +1,9 @@
 import re
 from datetime import datetime
+from enum import Enum
 from typing import Hashable, Any
+
+import parse
 
 import aiotask_context
 
@@ -103,7 +106,17 @@ class RegExDict(object):
     def __init__(self):
         self._regexes = {}
 
+        # The last tested item and result
+        self.last_request = None
+        self.last_result = None
+
     def __getitem__(self, name):
+
+        # Check for a possible speedup
+        if self.last_request == name:
+            return self.last_result
+
+        # Search through all inputs for a matching regex
         for regex, value in self._regexes.items():
             m = regex.match(name)
             if m is not None:
@@ -111,8 +124,13 @@ class RegExDict(object):
         raise KeyError('Key does not match any regex')
 
     def __contains__(self, item):
+
+        # Check existence by accessing the item in question
         try:
-            self[item]
+
+            # Remember the last questioned item to speed up access
+            self.last_result = self[item]
+            self.last_request = item
         except KeyError:
             return False
         else:
@@ -120,3 +138,55 @@ class RegExDict(object):
 
     def __setitem__(self, regex, value):
         self._regexes[re.compile(regex)] = value
+
+
+class ParsingDict(object):
+    """
+    A dictionary-like to handle parsing strings, inspired by the RegExDict
+    """
+
+    def __init__(self):
+        self._entries = dict()
+
+        # The last tested item and result
+        self.last_request = None
+        self.last_result = None
+
+    def __getitem__(self, name):
+
+        # Check for a possible speedup
+        if self.last_request == name:
+            return self.last_result
+
+        # Search through all inputs for a matching regex
+        for pattern, value in self._entries.items():
+            m = pattern.parse(name)
+            if m is not None:
+                return value, m
+        raise KeyError('Key does not match any regex')
+
+    def __contains__(self, item):
+
+        # Check existence by accessing the item in question
+        try:
+
+            # Remember the last questioned item to speed up access
+            self.last_result = self[item]
+            self.last_request = item
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def __setitem__(self, pattern, value):
+        self._entries[parse.compile(pattern)] = value
+
+
+class Mode(Enum):
+    """
+    A Enum to ease the specification of the processing mode of a route
+    """
+
+    DEFAULT = 0
+    REGEX = 1
+    PARSE = 2
