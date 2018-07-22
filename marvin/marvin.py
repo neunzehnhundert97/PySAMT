@@ -6,7 +6,6 @@ from os import path
 from typing import Dict, Callable, Any, Tuple
 
 import aiotask_context as _context
-import parse
 import telepot
 import telepot.aio.delegate
 import toml
@@ -47,6 +46,11 @@ def _config_value(*keys, default: Any = None) -> Any:
             return default
 
     return step
+
+
+def _handle_exit(signum, frame):
+    print(type(signum))
+    print(type(frame))
 
 
 class Marvin:
@@ -186,7 +190,7 @@ class Marvin:
 class _Session(telepot.aio.helper.UserHandler):
     """
     The underlying framework telepot spawns an instance of this class for every conversation its encounters.
-    It will be responsilbe for directing the bot's reactions
+    It will be responsible for directing the bot's reactions
     """
 
     # The routing dictionaries
@@ -227,7 +231,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
     async def on_callback_query(self) -> None:
         """
-        The function which will be called by telepot if the incomming message is a callback query
+        The function which will be called by telepot if the incoming message is a callback query
         """
 
         pass
@@ -235,7 +239,7 @@ class _Session(telepot.aio.helper.UserHandler):
     async def on_chat_message(self, msg: dict) -> None:
         """
         The function which will be called by telepot
-        :param msg: The reveived message as dictionary
+        :param msg: The received message as dictionary
         """
 
         # Tests, if it is normal message or something special
@@ -320,10 +324,10 @@ class _Session(telepot.aio.helper.UserHandler):
 
     async def apply_language(self, key: str, *format_content) -> None:
         """
-        Uses the given key and formatting addition to answer the user the appropiate language
+        Uses the given key and formatting addition to answer the user the appropriate language
         :param key: the key to the right answer
         :param format_content: The format string contents
-        :return The formattet answer
+        :return The formatted answer
         """
 
         # The language code should be something like de, but could be also like de_DE or non-existent
@@ -365,9 +369,16 @@ class _Session(telepot.aio.helper.UserHandler):
         :param msg: The message to be sent
         """
 
-        # Cast the message to a string to circumvent erros
+        # Cast the message to a string to circumvent errors
         if not isinstance(msg, str):
             msg = str(msg)
+
+        # Prepare kwargs according to the configurations
+        kwargs = {
+            "parse_mode": _config_value('bot', 'markup', default=None),
+            "reply_to_message_id": _context.get('message').id if _config_value('bot', 'mark_as_answer',
+                                                                               default=False) else None,
+        }
 
         # Create dictionary to switch between functions
         method = {
@@ -387,51 +398,51 @@ class _Session(telepot.aio.helper.UserHandler):
 
         func = method.get(command, None)
 
-        # Call the appropiate function
+        # Call the appropriate function
         if func is not None:
-            await method[command](payload)
+            await method[command](payload, **kwargs)
         else:
-            await self.sender.sendMessage(msg, parse_mode=_config_value('bot', 'markup', default=None))
+            await self.sender.sendMessage(msg, **kwargs)
 
-    async def send_photo(self, file):
+    async def send_photo(self, file, **kwargs):
         """
         Sends a photo to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendPhoto(open(file, 'rb'))
+        await self.sender.sendPhoto(open(file, 'rb'), **kwargs)
 
-    async def send_document(self, file):
+    async def send_document(self, file, **kwargs):
         """
         Sends a document to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendDocument(open(file, 'rb'))
+        await self.sender.sendDocument(open(file, 'rb'), **kwargs)
 
-    async def send_audio(self, file):
+    async def send_audio(self, file, **kwargs):
         """
         Sends a audio to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendAudio(open(file, 'rb'))
+        await self.sender.sendAudio(open(file, 'rb'), **kwargs)
 
-    async def send_voice(self, file):
+    async def send_voice(self, file, **kwargs):
         """
         Sends a voice to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendVoice(open(file, 'rb'))
+        await self.sender.sendVoice(open(file, 'rb'), **kwargs)
 
-    async def send_video(self, file):
+    async def send_video(self, file, **kwargs):
         """
         Sends a video to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendVideo(open(file, 'rb'))
+        await self.sender.sendVideo(open(file, 'rb'), **kwargs)
 
     @staticmethod
     async def default_answer() -> str:

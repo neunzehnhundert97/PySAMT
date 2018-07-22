@@ -35,9 +35,10 @@ class Message:
     """
 
     def __init__(self, msg: dict):
-        # Safe all usefull information as attributes
+        # Safe all useful information as attributes
         self.date = datetime.fromtimestamp(msg['date'])
         self.text = msg.get('text', None)
+        self.id = msg['message_id']
 
 
 class Sticker:
@@ -46,11 +47,11 @@ class Sticker:
     """
 
     def __init__(self, sticker: dict):
-        # Safe all usefull information as attributes
+        # Safe all useful information as attributes
         self.emoji = sticker['emoji']
         self.file_id = sticker['file_id']
         self.file_size = sticker['file_size']
-        self.heigth = sticker['height']
+        self.height = sticker['height']
         self.set_name = sticker['set_name']
 
 
