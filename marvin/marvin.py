@@ -404,7 +404,8 @@ class _Session(telepot.aio.helper.UserHandler):
         caption = None
         if ":" in msg:
             command, payload = msg.split(":", 1)
-            payload, caption = payload.split(";", 1)
+            if ";" in payload:
+                payload, caption = payload.split(";", 1)
 
         func = method.get(command, None)
 
