@@ -13,6 +13,8 @@ from telepot.aio.loop import MessageLoop
 
 from marvin.helper import User, RegExDict, Message, Mode, ParsingDict
 
+logger = logging.getLogger(__name__)
+
 
 def _load_configuration(filename: str) -> dict:
     """
@@ -68,8 +70,8 @@ class Marvin:
         try:
             _config = _load_configuration("Configuration")
         except FileNotFoundError:
-            logging.critical("The configuration file could not be found. Please make sure there is a file called " +
-                             "Configuration.toml in the directory config.")
+            logger.critical("The configuration file could not be found. Please make sure there is a file called " +
+                            "Configuration.toml in the directory config.")
             quit(-1)
 
         # Read language files
@@ -82,7 +84,7 @@ class Marvin:
 
         # Initialize bot
         self._create_bot()
-        logging.info("Bot started")
+        logger.info("Bot started")
 
     def listen(self) -> None:
         """
@@ -120,6 +122,10 @@ class Marvin:
         Configures the default python logging module
         """
 
+        # Deactivate loggers of imported modules
+        log = logging.getLogger("parse")
+        log.setLevel(logging.CRITICAL)
+
         # Convert the written level into the numeric one
         level = {"info": logging.INFO,
                  "debug": logging.DEBUG,
@@ -129,9 +135,11 @@ class Marvin:
                  }.get(_config_value('general', 'logging', default="error").lower(), logging.WARNING)
 
         # Configure the logger
-        logging.basicConfig(level=level,
-                            datefmt="%X",
-                            format="[%(asctime)s] %(message)s")
+        logger.setLevel(level)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("[%(asctime)s] %(message)s", "%X")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     @staticmethod
     def answer(message: str, mode: Mode = Mode.DEFAULT) -> Callable:
@@ -217,7 +225,7 @@ class _Session(telepot.aio.helper.UserHandler):
         # Create dictionary to use as persistent storage
         self.storage = dict()
 
-        logging.info(
+        logger.info(
             "User {} connected".format(self.user))
 
     async def on_close(self, timeout: int) -> None:
@@ -225,7 +233,7 @@ class _Session(telepot.aio.helper.UserHandler):
         The function which will be called by telepot when the connection times out. Unused.
         :param timeout: The length of the exceeded timeout
         """
-        logging.info("User {} timed out".format(self.user))
+        logger.info("User {} timed out".format(self.user))
 
         pass
 
@@ -255,7 +263,7 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         text = msg['text']
-        logging.debug("Message by {}: \"{}\"".format(self.user, text))
+        logger.debug("Message by {}: \"{}\"".format(self.user, text))
 
         # Prepare context for the user to access if needed
         _context.set('message', Message(msg))
@@ -291,7 +299,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # A none answer wil  be seen as order to stay silent
         if answer is None:
-            logging.info("No answer was given")
+            logger.info("No answer was given")
             return
 
         # If the language feature is wanted, it ist now applied
@@ -314,13 +322,13 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Extract the emojis associated with the sticker
         if _config_value('bot', 'extract_emojis', default=False):
-            logging.debug("Sticker by {}, will be dismantled".format(self.user))
+            logger.debug("Sticker by {}, will be dismantled".format(self.user))
             msg['text'] = msg['sticker']['emoji']
             await self.handle_text_message(msg)
 
         # Or call the default handler
         else:
-            logging.debug("Message by {}".format(self.user))
+            logger.debug("Message by {}".format(self.user))
 
     async def apply_language(self, key: str, *format_content) -> None:
         """
@@ -346,12 +354,12 @@ class _Session(telepot.aio.helper.UserHandler):
 
                 # In strict mode, raise the error again, which will terminate the application
                 if _config_value('strict_mode', default=False):
-                    logging.critical('Language key "{}" not found!'.format(key))
+                    logger.critical('Language key "{}" not found!'.format(key))
                     raise e
 
                 # In non-strict mode just send the user the key as answer
                 else:
-                    logging.info('Language key "{}" not found, sending itself instead'.format(key))
+                    logger.info('Language key "{}" not found, sending itself instead'.format(key))
                     await self.send(key)
                     return
 
@@ -393,48 +401,50 @@ class _Session(telepot.aio.helper.UserHandler):
         # Try to detect a relevant command
         command = ""
         payload = None
+        caption = None
         if ":" in msg:
             command, payload = msg.split(":", 1)
+            payload, caption = payload.split(";", 1)
 
         func = method.get(command, None)
 
         # Call the appropriate function
         if func is not None:
-            await method[command](payload, **kwargs)
+            await method[command](payload, caption, **kwargs)
         else:
             await self.sender.sendMessage(msg, **kwargs)
 
-    async def send_photo(self, file, **kwargs):
+    async def send_photo(self, file, caption, **kwargs):
         """
         Sends a photo to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendPhoto(open(file, 'rb'), **kwargs)
+        await self.sender.sendPhoto(open(file, 'rb'), caption, **kwargs)
 
-    async def send_document(self, file, **kwargs):
+    async def send_document(self, file, caption, **kwargs):
         """
         Sends a document to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendDocument(open(file, 'rb'), **kwargs)
+        await self.sender.sendDocument(open(file, 'rb'), caption, **kwargs)
 
-    async def send_audio(self, file, **kwargs):
+    async def send_audio(self, file, caption, **kwargs):
         """
         Sends a audio to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendAudio(open(file, 'rb'), **kwargs)
+        await self.sender.sendAudio(open(file, 'rb'), caption, **kwargs)
 
-    async def send_voice(self, file, **kwargs):
+    async def send_voice(self, file, caption, **kwargs):
         """
         Sends a voice to the user
         :param file: A path either relative or absolute to the file to send
         """
 
-        await self.sender.sendVoice(open(file, 'rb'), **kwargs)
+        await self.sender.sendVoice(open(file, 'rb'), caption, **kwargs)
 
     async def send_video(self, file, **kwargs):
         """
