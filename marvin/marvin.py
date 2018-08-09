@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import traceback
 from inspect import iscoroutinefunction
 from os import path
 from typing import Dict, Callable, Any, Tuple
@@ -267,7 +268,7 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         text = msg['text']
-        logger.debug("Message by {}: \"{}\"".format(self.user, text))
+        logger.debug(f"Message by {self.user}: \"{text}\"")
 
         # Prepare context for the user to access if needed
         _context.set('message', Message(msg))
@@ -296,10 +297,19 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # The user of the framework can choose freely between synchronous and asynchronous programming
         # So the program decides upon the signature how to call the function
-        if iscoroutinefunction(func):
-            answer = await func(*args, **kwargs)
-        else:
-            answer = func(*args, **kwargs)
+        try:
+            if iscoroutinefunction(func):
+                answer = await func(*args, **kwargs)
+            else:
+                answer = func(*args, **kwargs)
+        except Exception as e:
+            text = e.args[0]
+            err = traceback.extract_tb(sys.exc_info()[2])[-1]
+            err = "\tError message: {}\n\tFile: {}\n\tFunc: {}\n\tLiNo: {}\n\tLine: {}".format(
+                text, err.filename.split("/")[-1], err.name, err.lineno, err.line)
+            logger.warning(
+                'An error was caused during processing the message "{}" by {}\n{}'.format(text, self.user, err))
+            answer = None
 
         # A none answer wil  be seen as order to stay silent
         if answer is None:
