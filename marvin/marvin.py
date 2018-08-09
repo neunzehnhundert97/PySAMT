@@ -24,7 +24,7 @@ def _load_configuration(filename: str) -> dict:
     """
 
     script_path = path.dirname(path.realpath(sys.argv[0]))
-    return toml.load("{}/config/{}.toml".format(script_path, filename))
+    return toml.load(f"{script_path}/config/{filename}.toml")
 
 
 def _config_value(*keys, default: Any = None) -> Any:
@@ -136,10 +136,14 @@ class Marvin:
 
         # Configure the logger
         logger.setLevel(level)
-        handler = logging.StreamHandler()
+        shandler = logging.StreamHandler()
+        fhandler = logging.FileHandler(
+            f"{path.dirname(path.realpath(sys.argv[0]))}/{_config_value('general', 'logfile', default='Bot.log')}")
         formatter = logging.Formatter("[%(asctime)s] %(message)s", "%X")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        shandler.setFormatter(formatter)
+        fhandler.setFormatter(formatter)
+        logger.addHandler(shandler)
+        logger.addHandler(fhandler)
 
     @staticmethod
     def answer(message: str, mode: Mode = Mode.DEFAULT) -> Callable:
