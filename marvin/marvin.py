@@ -1,11 +1,11 @@
 import asyncio
 import logging
 import sys
-import time
 import traceback
+import types
 from inspect import iscoroutinefunction
 from os import path
-from typing import Dict, Callable, Any, Tuple, Iterable
+from typing import Dict, Callable, Any, Tuple, Iterable, Union
 
 import aiotask_context as _context
 import telepot
@@ -212,22 +212,79 @@ class Answer(object):
     An object to describe more complex answering behavior
     """
 
-    def __init__(self, msg: str = None, delay: int = 0):
+    def __init__(self, msg: str, *format_content: Any, delay: int = 0):
         """
         :param msg: The message included in this answer
         """
 
-        self.msg = msg
+        self._msg = msg
+        self.format_content = format_content
         self.delay = delay
 
-    def get_config(self):
+    def _apply_language(self) -> str:
+        """
+        Uses the given key and formatting addition to answer the user the appropriate language
+        :param key: the key to the right answer
+        :param format_content: The format string contents
+        :return The formatted answer
+        """
+
+        # The language code should be something like de, but could be also like de_DE or non-existent
+        lang_code = _context.get('user').language_code.split('_')[0].lower()
+        answer = None
+
+        try:
+            answer: str = _Session.language[lang_code][self._msg]
+
+        except KeyError:
+            # Try to load the answer string
+            try:
+                answer: str = _Session.language['default'][self._msg]
+
+            # Catch the key error which might be thrown
+            except KeyError as e:
+
+                # In strict mode, raise the error again, which will terminate the application
+                if self.strict_mode:
+                    logger.critical('Language key "{}" not found!'.format(self._msg))
+                    raise e
+
+                # In non-strict mode just send the user the key as answer
+                else:
+                    return self._msg
+
+        # Apply formatting
+        if self.format_content is not None and len(self.format_content) > 0:
+            answer = answer.format(*self.format_content)
+
+        # Write back
+        return answer
+
+    @property
+    def msg(self) -> str:
+        """
+        Returns either the message directly or the formatted one
+        :return: The final message to be sent
+        """
+
+        if self.language_feature:
+            return self._apply_language()
+        else:
+            return self._msg
+
+    def get_config(self) -> Dict[str, Any]:
+        """
+
+        :return: kwargs for the sending of the answer
+        """
+
         return {
             "parse_mode": self.markup,
             "reply_to_message_id": _context.get('message').id if self.mark_as_answer else None
         }
 
     @classmethod
-    def load_defaults(cls):
+    def load_defaults(cls) -> None:
         """
         Load default values from config
         """
@@ -307,9 +364,8 @@ class _Session(telepot.aio.helper.UserHandler):
 
         text = msg['text']
         log = f'Message by {self.user}: "{text}"'
-        t = time.time()
 
-        # Prepare context for the user to access if needed
+        # Prepare the context
         _context.set('message', Message(msg))
         _context.set('user', self.user)
         _context.set('_<[storage]>_', self.storage)
@@ -328,7 +384,8 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Check, if the message is covered by one of the known regex routes
         elif text in _Session.regex_routes:
-            func = _Session.regex_routes[text]
+            func, matching = _Session.regex_routes[text]
+            kwargs = matching.groupdict()
 
         # After everything else has not matched, call the default handler
         else:
@@ -352,51 +409,45 @@ class _Session(telepot.aio.helper.UserHandler):
             else:
                 msg = e.args[0]
             err = traceback.extract_tb(sys.exc_info()[2])[-1]
-            err = "\n\tDuring the processing occured an error" \
-                  "\n\t\tError message: {}" \
-                  "\n\t\tFile: {}" \
-                  "\n\t\tFunc: {}" \
-                  "\n\t\tLiNo: {}" \
-                  "\n\t\tLine: {}" \
-                  "\n\tNothing was returned to the user" \
+            err = "\n\tDuring the processing occured an error\n\t\tError message: {}\n\t\tFile: {}\n\t\tFunc: {}" \
+                  "\n\t\tLiNo: {}\n\t\tLine: {}\n\tNothing was returned to the user" \
                 .format(msg, err.filename.split("/")[-1], err.name, err.lineno, err.line)
             logger.warning(log + err)
 
             # Send error message, if configured
-            if _config_value('bot', 'error_reply', default=None) is not None:
-                if _config_value('bot', 'language_feature', default=False):
-                    await self.apply_language(_config_value('bot', 'error_reply'))
-                else:
-                    await self.send(_config_value('bot', 'error_reply'))
-            return
+            await self.handle_error()
 
-        # Answer the user
+        else:
+            await self.prepare_answer(answer, log)
+
+    async def prepare_answer(self, answer: Union[Answer, Iterable], log: str = "") -> None:
+        """
+
+        :param answer:
+        :param log:
+        :return:
+        """
+
         try:
 
             # None as return will result in no answer being sent
             if answer is None:
                 logger.info(log + "\nNo answer was given")
+                return
+
+            # Convert into a complex answer to unify processing
+            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType)):
+                answer = Answer(str(answer))
+            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], Answer):
+                answer = Answer(str(answer[0]), *answer[1:])
 
             # Handle complex answer
-            elif isinstance(answer, Answer):
-                await self.handle_complex_answer(answer)
+            if isinstance(answer, Answer):
+                await self.handle_complex_answer((answer,))
 
             # Handle multiple complex answers
-            elif isinstance(answer, (tuple, list)) and isinstance(answer[0], Answer):
-                await self.handle_complex_answer(*answer)
-
-            # If the language feature is wanted, it ist now applied
-            elif _config_value('bot', 'language_feature', default=False):
-
-                # Convert answer into an tuple, if not already, to easy handling
-                if not isinstance(answer, (tuple, list)):
-                    answer = answer,
-
-                # Apply the language
-                await self.apply_language(answer[0], *answer[1:] if len(answer) > 1 else [])
-
-            else:
-                await self.send(answer)
+            elif isinstance(answer, (tuple, list, types.GeneratorType)):
+                await self.handle_complex_answer(answer)
 
         except FileNotFoundError as e:
             err = '\n\tThe request could not be fulfilled as the file "{}" could not be found'.format(e.filename)
@@ -424,13 +475,8 @@ class _Session(telepot.aio.helper.UserHandler):
             else:
                 msg = e.args[0]
             err = traceback.extract_tb(sys.exc_info()[2])[-1]
-            err = "\n\tDuring the sending of the bot's answer occured an error" \
-                  "\n\t\tError message: {}" \
-                  "\n\t\tFile: {}" \
-                  "\n\t\tFunc: {}" \
-                  "\n\t\tLiNo: {}" \
-                  "\n\t\tLine: {}" \
-                  "\n\tNothing was returned to the user" \
+            err = "\n\tDuring the sending of the bot's answer occured an error\n\t\tError message: {}\n\t\tFile: {}" \
+                  "\n\t\tFunc: {}\n\t\tLiNo: {}\n\t\tLine: {}\n\tNothing was returned to the user" \
                   "\n\tYou may report this bug as it either should not have occured" \
                   "or should have been properly caught" \
                 .format(msg, err.filename.split("/")[-1], err.name, err.lineno, err.line)
@@ -438,11 +484,13 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # Send error message, if configured
             await self.handle_error()
-            return
 
-        logger.info(log + "\n\tReplied in {:d}ms".format(int((time.time() - t) * 1000)))
+        else:
 
-    async def handle_sticker(self, msg):
+            if log is not None and len(log) > 0:
+                logger.info(log)
+
+    async def handle_sticker(self, msg: Dict) -> None:
         """
         Processes a sticker either by sending a default answer or extracting the corresponding emojis
         :param msg: The received message as dictionary
@@ -455,21 +503,18 @@ class _Session(telepot.aio.helper.UserHandler):
             await self.handle_text_message(msg)
 
         # Or call the default handler
-        else:
-            logger.debug("Message by {}".format(self.user))
+        answer = await self.default_sticker_answer()
+        self.prepare_answer(answer)
 
-    async def handle_error(self):
+    async def handle_error(self) -> None:
         """
         Informs the connected user that an exception occured, if enabled
         """
 
         if _config_value('bot', 'error_reply', default=None) is not None:
-            if _config_value('bot', 'language_feature', default=False):
-                await self.apply_language(_config_value('bot', 'error_reply'))
-            else:
-                await self.send(_config_value('bot', 'error_reply'))
+            await self.prepare_answer(Answer(_config_value('bot', 'error_reply')))
 
-    async def handle_complex_answer(self, *answers: Answer) -> None:
+    async def handle_complex_answer(self, answers: Iterable[Answer]) -> None:
         """
         Handle Answer objects
         :param answers: Answer objects to be sent
@@ -477,54 +522,9 @@ class _Session(telepot.aio.helper.UserHandler):
 
         answer: Answer = None
         for answer in answers:
-            if answer.delay == 0:
-                await self.send(answer.msg, **answer.get_config())
-            else:
-                # TODO Complex and more efficient scheduling
-                loop.create_task(self.send(answer.msg, **answer.get_config(), delay=answer.delay))
+            await self.send(answer.msg, **answer.get_config(), delay=answer.delay)
 
-    async def apply_language(self, key: str, *format_content, **kwargs) -> None:
-        """
-        Uses the given key and formatting addition to answer the user the appropriate language
-        :param key: the key to the right answer
-        :param format_content: The format string contents
-        :return The formatted answer
-        """
-
-        # The language code should be something like de, but could be also like de_DE or non-existent
-        lang_code = self.user.language_code.split('_')[0].lower()
-
-        try:
-            answer: str = _Session.language[lang_code][key]
-
-        except KeyError:
-            # Try to load the answer string
-            try:
-                answer: str = _Session.language['default'][key]
-
-            # Catch the key error which might be thrown
-            except KeyError as e:
-
-                # In strict mode, raise the error again, which will terminate the application
-                if _config_value('strict_mode', default=False):
-                    logger.critical('Language key "{}" not found!'.format(key))
-                    raise e
-
-                # In non-strict mode just send the user the key as answer
-                else:
-                    logger.info('Language key "{}" not found, sending itself instead'.format(
-                        key if len(key) <= 20 else key[:20] + "..."))
-                    await self.send(key, **kwargs)
-                    return
-
-        # Apply formatting
-        if format_content is not None and len(format_content) > 0:
-            answer = answer.format(*format_content)
-
-        # Send back
-        await self.send(answer, **kwargs)
-
-    async def send(self, msg: str, delay: int = 0, **kwargs):
+    async def send(self, msg: str, delay: int = 0, **kwargs) -> None:
         """
         Sends a message back to the user.
         This either might just be plaintext or another feature like stickers or photos
@@ -533,19 +533,19 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         # Delay sending
-        await asyncio.sleep(delay)
+        if delay > 0:
+
+            # Define a function to delay a recursive call
+            async def wait(x: int):
+                await asyncio.sleep(x)
+                await self.send(msg, **kwargs)
+
+            loop.create_task(wait(delay))
+            return
 
         # Cast the message to a string to circumvent errors
         if not isinstance(msg, str):
             msg = str(msg)
-
-        # Prepare kwargs according to the configurations
-        if len(kwargs.keys()) == 0:
-            kwargs = {
-                "parse_mode": _config_value('bot', 'markup', default=None),
-                "reply_to_message_id": _context.get('message').id if _config_value('bot', 'mark_as_answer',
-                                                                                   default=False) else None,
-            }
 
         # Create dictionary to switch between functions
         method = {
@@ -574,7 +574,7 @@ class _Session(telepot.aio.helper.UserHandler):
         else:
             await self.sender.sendMessage(msg, **kwargs)
 
-    async def send_photo(self, file, caption, **kwargs):
+    async def send_photo(self, file: str, caption: str, **kwargs) -> None:
         """
         Sends a photo to the user
         :param file: A path either relative or absolute to the file to send
@@ -583,7 +583,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         await self.sender.sendPhoto(open(file, 'rb'), caption, **kwargs)
 
-    async def send_document(self, file, caption, **kwargs):
+    async def send_document(self, file: str, caption: str, **kwargs) -> None:
         """
         Sends a document to the user
         :param file: A path either relative or absolute to the file to send
@@ -592,7 +592,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         await self.sender.sendDocument(open(file, 'rb'), caption, **kwargs)
 
-    async def send_audio(self, file, caption, **kwargs):
+    async def send_audio(self, file: str, caption: str, **kwargs) -> None:
         """
         Sends a audio to the user
         :param file: A path either relative or absolute to the file to send
@@ -601,7 +601,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         await self.sender.sendAudio(open(file, 'rb'), caption, **kwargs)
 
-    async def send_voice(self, file, caption, **kwargs):
+    async def send_voice(self, file: str, caption: str, **kwargs) -> None:
         """
         Sends a voice to the user
         :param file: A path either relative or absolute to the file to send
@@ -610,16 +610,17 @@ class _Session(telepot.aio.helper.UserHandler):
 
         await self.sender.sendVoice(open(file, 'rb'), caption, **kwargs)
 
-    async def send_video(self, file, **kwargs):
+    async def send_video(self, file: str, caption: str, **kwargs) -> None:
         """
         Sends a video to the user
         :param file: A path either relative or absolute to the file to send
+        :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendVideo(open(file, 'rb'), **kwargs)
+        await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
 
     @staticmethod
-    async def default_answer() -> str:
+    async def default_answer() -> Union[str, Answer, Iterable[str], None]:
         """
         Sets the default answer function to do nothing if not overwritten
         """
@@ -627,7 +628,7 @@ class _Session(telepot.aio.helper.UserHandler):
         pass
 
     @staticmethod
-    async def default_sticker_answer() -> str:
+    async def default_sticker_answer() -> Union[str, Answer, Iterable[str], None]:
         """
         Sets the default sticker answer function to do nothing if not overwritten
         """

@@ -3,9 +3,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Hashable, Any
 
-import parse
-
 import aiotask_context
+import parse
 
 
 class User:
@@ -14,7 +13,8 @@ class User:
     """
 
     def __init__(self, user: dict):
-        # Safe all usefull information as attributes
+
+        # Safe all useful information as attributes
         self.id = user.get("id")
         self.is_bot = user.get('is_bot')
         self.first_name = user.get('first_name')
@@ -47,6 +47,7 @@ class Sticker:
     """
 
     def __init__(self, sticker: dict):
+
         # Safe all useful information as attributes
         self.emoji = sticker['emoji']
         self.file_id = sticker['file_id']
@@ -95,7 +96,8 @@ class Context:
 
 # Source: https://djangosnippets.org/snippets/309/
 class RegExDict(object):
-    """A dictionary-like object for use with regular expression keys.
+    """
+    A dictionary-like object for use with regular expression keys.
     Setting a key will map all strings matching a certain regex to the
     set value.
 
@@ -121,7 +123,8 @@ class RegExDict(object):
         for regex, value in self._regexes.items():
             m = regex.match(name)
             if m is not None:
-                return value
+                return value, m
+
         raise KeyError('Key does not match any regex')
 
     def __contains__(self, item):
@@ -164,7 +167,7 @@ class ParsingDict(object):
             m = pattern.parse(name)
             if m is not None:
                 return value, m
-        raise KeyError('Key does not match any regex')
+        raise KeyError('Key does not match any format')
 
     def __contains__(self, item):
 
