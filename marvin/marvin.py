@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pprint
 import sys
 import traceback
 import types
@@ -8,11 +9,13 @@ from os import path
 from typing import Dict, Callable, Any, Tuple, Iterable, Union
 
 import aiotask_context as _context
+import math
 import telepot
 import telepot.aio.delegate
 import toml
 from telepot.aio.loop import MessageLoop
 from telepot.exception import TelegramError
+from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from marvin.helper import User, RegExDict, Message, Mode, ParsingDict
 
@@ -212,13 +215,17 @@ class Answer(object):
     An object to describe more complex answering behavior
     """
 
-    def __init__(self, msg: str, *format_content: Any, delay: int = 0):
+    def __init__(self, msg: str, *format_content: Any, choices: Iterable = None,
+                 callback: Callable = None, keyboard: Iterable = None, delay: int = 0):
         """
         :param msg: The message included in this answer
         """
 
         self._msg = msg
         self.format_content = format_content
+        self.choices = choices
+        self.callback = callback
+        self.keyboard = keyboard
         self.delay = delay
 
     def _apply_language(self) -> str:
@@ -278,9 +285,61 @@ class Answer(object):
         :return: kwargs for the sending of the answer
         """
 
+        if self.choices is not None:
+            # In the case of 1-dimensional array
+            # align the options in pairs of 2
+            if isinstance(self.choices[0], str):
+                self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
+                                range(int(math.ceil(len(self.choices) / 2)))]
+
+            # Prepare button array
+            buttons = []
+
+            # Loop over all rows
+            for row in self.choices:
+                r = []
+                # Loop over each entry
+                for text in row:
+                    # Append the text as a new button
+                    r.append(InlineKeyboardButton(
+                        text=text, callback_data=text))
+                # Append the button row to the list
+                buttons.append(r)
+
+            # Assemble keyboard
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        elif self.keyboard is not None:
+            # In the case of 1-dimensional array
+            # align the options in pairs of 2
+            if isinstance(self.keyboard[0], str):
+                self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
+                                range(int(math.ceil(len(self.choices) / 2)))]
+
+            # Prepare button array
+            buttons = []
+
+            # Loop over all rows
+            for row in self.keyboard:
+                r = []
+                # Loop over each entry
+                for text in row:
+                    # Append the text as a new button
+                    r.append(KeyboardButton(
+                        text=text))
+                # Append the button row to the list
+                buttons.append(r)
+
+            # Assemble keyboard
+            keyboard = ReplyKeyboardMarkup(keyboard=buttons)
+        else:
+            keyboard = None
+
         return {
-            "parse_mode": self.markup,
-            "reply_to_message_id": _context.get('message').id if self.mark_as_answer else None
+            'parse_mode': self.markup,
+            'reply_to_message_id': _context.get('message').id if self.mark_as_answer else None,
+            'disable_web_page_preview': self.disable_web_preview,
+            'disable_notification': self.disable_notification,
+            'reply_markup': keyboard
         }
 
     @classmethod
@@ -292,7 +351,9 @@ class Answer(object):
         cls.mark_as_answer = _config_value('bot', 'mark_as_answer', default=False)
         cls.markup = _config_value('bot', 'markup', default=None)
         cls.language_feature = _config_value('bot', 'language_feature', default=False)
-        cls.strict_mode = _config_value('bot', 'strict_mode')
+        cls.strict_mode = _config_value('bot', 'strict_mode', default=False)
+        cls.disable_web_preview = _config_value('bot', 'disable_web_preview', default=False)
+        cls.disable_notification = _config_value('bot', 'disable_notification', default=False)
 
 
 class _Session(telepot.aio.helper.UserHandler):
@@ -324,6 +385,9 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Create dictionary to use as persistent storage
         self.storage = dict()
+        self.query_callback = {}
+        self.query_id = None
+        self.last_sent = None
 
         logger.info(
             "User {} connected".format(self.user))
@@ -337,12 +401,37 @@ class _Session(telepot.aio.helper.UserHandler):
 
         pass
 
-    async def on_callback_query(self) -> None:
+    async def on_callback_query(self, query: Dict) -> None:
         """
         The function which will be called by telepot if the incoming message is a callback query
         """
 
-        pass
+        # Look for a matching callback and execute it
+        answer = None
+        func = self.query_callback.pop(query['message']['message_id'], None)
+        if func is not None:
+            if iscoroutinefunction(func):
+                answer = await func(query['data'])
+            else:
+                answer = func(query['data'])
+
+        # Acknowledge the received query
+        # (The waiting circle in the user's application will disappear)
+        await self.bot.answerCallbackQuery(query['id'])
+
+        # Replace the query to prevent multiple activations
+        if _config_value('query', 'replace_query', default=True):
+            await self.bot.editMessageText((self.user.id, query['message']['message_id']),
+                                           # The message and chat ids are inquired in this way to prevent an error when
+                                           # the user clicks on old queries
+                                           text=("{}\n<b>{}</b>" if self.last_sent[
+                                                                        0].markup == "HTML" else "{}\n**{}**").format(
+                                               self.last_sent[0].msg, query['data']),
+                                           parse_mode=self.last_sent[0].markup)
+
+        # Process answer
+        if answer is not None:
+            await self.prepare_answer(answer, log="")
 
     async def on_chat_message(self, msg: dict) -> None:
         """
@@ -443,11 +532,11 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # Handle complex answer
             if isinstance(answer, Answer):
-                await self.handle_complex_answer((answer,))
+                await self.handle_answer((answer,))
 
             # Handle multiple complex answers
             elif isinstance(answer, (tuple, list, types.GeneratorType)):
-                await self.handle_complex_answer(answer)
+                await self.handle_answer(answer)
 
         except FileNotFoundError as e:
             err = '\n\tThe request could not be fulfilled as the file "{}" could not be found'.format(e.filename)
@@ -514,7 +603,7 @@ class _Session(telepot.aio.helper.UserHandler):
         if _config_value('bot', 'error_reply', default=None) is not None:
             await self.prepare_answer(Answer(_config_value('bot', 'error_reply')))
 
-    async def handle_complex_answer(self, answers: Iterable[Answer]) -> None:
+    async def handle_answer(self, answers: Iterable[Answer]) -> None:
         """
         Handle Answer objects
         :param answers: Answer objects to be sent
@@ -522,30 +611,26 @@ class _Session(telepot.aio.helper.UserHandler):
 
         answer: Answer = None
         for answer in answers:
-            await self.send(answer.msg, **answer.get_config(), delay=answer.delay)
+            await self.send(answer)
 
-    async def send(self, msg: str, delay: int = 0, **kwargs) -> None:
+    async def send(self, answer: Answer) -> None:
         """
         Sends a message back to the user.
         This either might just be plaintext or another feature like stickers or photos
-        :param msg: The message to be sent
-        :param delay: Time in seconds the message may be delayed
+        :param answer: The answer to be sent
         """
 
         # Delay sending
-        if delay > 0:
+        if answer.delay > 0:
 
             # Define a function to delay a recursive call
-            async def wait(x: int):
-                await asyncio.sleep(x)
-                await self.send(msg, **kwargs)
+            async def wait():
+                await asyncio.sleep(answer.delay)
+                answer.delay = 0
+                await self.send(answer)
 
-            loop.create_task(wait(delay))
+            loop.create_task(wait())
             return
-
-        # Cast the message to a string to circumvent errors
-        if not isinstance(msg, str):
-            msg = str(msg)
 
         # Create dictionary to switch between functions
         method = {
@@ -556,6 +641,8 @@ class _Session(telepot.aio.helper.UserHandler):
             'audio': self.send_audio,
             'voice': self.send_voice
         }
+
+        msg = answer.msg
 
         # Try to detect a relevant command
         command = ""
@@ -570,9 +657,14 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Call the appropriate function
         if func is not None:
-            await method[command](payload, caption, **kwargs)
+            sent = await method[command](payload, caption, **answer.get_config())
         else:
-            await self.sender.sendMessage(msg, **kwargs)
+            sent = await self.sender.sendMessage(msg, **answer.get_config())
+
+        self.last_sent = answer, sent
+
+        if answer.callback is not None:
+            self.query_callback[sent['message_id']] = answer.callback
 
     async def send_photo(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -581,7 +673,7 @@ class _Session(telepot.aio.helper.UserHandler):
         :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendPhoto(open(file, 'rb'), caption, **kwargs)
+        return await self.sender.sendPhoto(open(file, 'rb'), caption, **kwargs)
 
     async def send_document(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -590,7 +682,7 @@ class _Session(telepot.aio.helper.UserHandler):
         :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendDocument(open(file, 'rb'), caption, **kwargs)
+        return await self.sender.sendDocument(open(file, 'rb'), caption, **kwargs)
 
     async def send_audio(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -599,7 +691,7 @@ class _Session(telepot.aio.helper.UserHandler):
         :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendAudio(open(file, 'rb'), caption, **kwargs)
+        return await self.sender.sendAudio(open(file, 'rb'), caption, **kwargs)
 
     async def send_voice(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -608,7 +700,7 @@ class _Session(telepot.aio.helper.UserHandler):
         :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendVoice(open(file, 'rb'), caption, **kwargs)
+        return await self.sender.sendVoice(open(file, 'rb'), caption, **kwargs)
 
     async def send_video(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -617,7 +709,7 @@ class _Session(telepot.aio.helper.UserHandler):
         :param caption: The caption to be shown on the media
         """
 
-        await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
+        return await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
 
     @staticmethod
     async def default_answer() -> Union[str, Answer, Iterable[str], None]:
