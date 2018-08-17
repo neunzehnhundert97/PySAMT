@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import pprint
 import sys
 import traceback
 import types
@@ -17,7 +16,7 @@ from telepot.aio.loop import MessageLoop
 from telepot.exception import TelegramError
 from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
-from marvin.helper import User, RegExDict, Message, Mode, ParsingDict
+from marvin.helper import *
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +89,7 @@ class Marvin:
         self._configure_logger()
 
         # Config Answer class
-        Answer.load_defaults()
+        _Answer.load_defaults()
 
         # Initialize bot
         self._create_bot()
@@ -210,13 +209,29 @@ class Marvin:
         return func
 
 
-class Answer(object):
+class _Answer(object):
     """
     An object to describe more complex answering behavior
     """
 
-    def __init__(self, msg: str, *format_content: Any, choices: Iterable = None,
-                 callback: Callable = None, keyboard: Iterable = None, delay: int = 0):
+    media_commands = {
+        'sticker': Media.STICKER,
+        'voice': Media.VOICE,
+        'audio': Media.AUDIO,
+        'photo': Media.PHOTO,
+        'video': Media.VIDEO,
+        'document': Media.DOCUMENT,
+    }
+
+    def __init__(self, msg: str = None,
+                 *format_content: Any,
+                 choices: Iterable = None,
+                 callback: Callable = None,
+                 keyboard: Iterable = None,
+                 media_type: Media = None,
+                 media: str = None,
+                 caption: str = None,
+                 delay: int = 0):
         """
         :param msg: The message included in this answer
         """
@@ -226,14 +241,87 @@ class Answer(object):
         self.choices = choices
         self.callback = callback
         self.keyboard = keyboard
+        self.media_type: Media = media_type
+        self.media = media
+        self.caption = caption
         self.delay = delay
+
+    async def send(self, sender):
+        """
+
+        :param sender:
+        :return:
+        """
+
+        msg = self.msg
+        kwargs = self.get_config()
+
+        if self.media_type == Media.TEXT:
+            return await sender.sendMessage(msg,
+                                            **{key: kwargs[key] for key in kwargs if key in ("parse_mode",
+                                                                                             "disable_web_page_preview",
+                                                                                             "disable_notification",
+                                                                                             "reply_to_message_id",
+                                                                                             "reply_markup")})
+
+        elif self.media_type == Media.STICKER:
+            return await sender.sendSticker(self.media,
+                                            **{key: kwargs[key] for key in kwargs if key in ('disable_notification',
+                                                                                             'reply_to_message_id',
+                                                                                             'reply_markup')})
+
+        elif self.media_type == Media.VOICE:
+            return await sender.sendVoice(open(self.media, "rb"),
+                                          **{key: kwargs[key] for key in kwargs if key in ("caption",
+                                                                                           "parse_mode",
+                                                                                           "duration",
+                                                                                           "disable_notification",
+                                                                                           "reply_to_message_id",
+                                                                                           "reply_markup")})
+
+        elif self.media_type == Media.AUDIO:
+            return await sender.sendAudio(open(self.media, "rb"),
+                                          **{key: kwargs[key] for key in kwargs if key in ("caption",
+                                                                                           "parse_mode",
+                                                                                           "duration",
+                                                                                           "performer",
+                                                                                           "title",
+                                                                                           "disable_notification",
+                                                                                           "reply_to_message_id",
+                                                                                           "reply_markup")})
+
+        elif self.media_type == Media.PHOTO:
+            return await sender.sendPhoto(open(self.media, "rb"),
+                                          **{key: kwargs[key] for key in kwargs if key in ("caption",
+                                                                                           "parse_mode",
+                                                                                           "disable_notification",
+                                                                                           "reply_to_message_id",
+                                                                                           "reply_markup")})
+
+        elif self.media_type == Media.VIDEO:
+            return await sender.sendVideo(open(self.media, "rb"),
+                                          **{key: kwargs[key] for key in kwargs if key in ("duration",
+                                                                                           "width",
+                                                                                           "height",
+                                                                                           "caption",
+                                                                                           "parse_mode",
+                                                                                           "supports_streaming",
+                                                                                           "disable_notification",
+                                                                                           "reply_to_message_id",
+                                                                                           "reply_markup")})
+
+        elif self.media_type == Media.DOCUMENT:
+            return await sender.sendDocument(open(self.media, "rb"),
+                                             **{key: kwargs[key] for key in kwargs if key in ("caption",
+                                                                                              "parse_mode",
+                                                                                              "disable_notification",
+                                                                                              "reply_to_message_id",
+                                                                                              "reply_markup")})
 
     def _apply_language(self) -> str:
         """
         Uses the given key and formatting addition to answer the user the appropriate language
-        :param key: the key to the right answer
-        :param format_content: The format string contents
-        :return The formatted answer
+        :return The formatted text
         """
 
         # The language code should be something like de, but could be also like de_DE or non-existent
@@ -274,10 +362,30 @@ class Answer(object):
         :return: The final message to be sent
         """
 
+        # Retrieve message
         if self.language_feature:
-            return self._apply_language()
+            msg = self._apply_language()
         else:
-            return self._msg
+            msg = self._msg
+
+        # If unset, determine media type
+        if self.media_type is None:
+
+            # Try to detect a relevant command
+            command = ""
+            if ":" in msg and command in ("sticker", "audio", "voice", "document", "photo", "video"):
+                command, payload = msg.split(":", 1)
+                if ";" in payload:
+                    self.media, self.caption = payload.split(";", 1)
+                else:
+                    self.media = payload
+
+                msg = None
+                self._msg = msg
+
+            self.media_type = self.media_commands.get(command, Media.TEXT)
+
+        return msg
 
     def get_config(self) -> Dict[str, Any]:
         """
@@ -308,6 +416,7 @@ class Answer(object):
 
             # Assemble keyboard
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
         elif self.keyboard is not None:
             # In the case of 1-dimensional array
             # align the options in pairs of 2
@@ -330,7 +439,7 @@ class Answer(object):
                 buttons.append(r)
 
             # Assemble keyboard
-            keyboard = ReplyKeyboardMarkup(keyboard=buttons)
+            keyboard = ReplyKeyboardMarkup(keyboard=buttons, one_time_keyboard=True)
         else:
             keyboard = None
 
@@ -339,7 +448,8 @@ class Answer(object):
             'reply_to_message_id': _context.get('message').id if self.mark_as_answer else None,
             'disable_web_page_preview': self.disable_web_preview,
             'disable_notification': self.disable_notification,
-            'reply_markup': keyboard
+            'reply_markup': keyboard,
+            'caption': self.caption
         }
 
     @classmethod
@@ -388,6 +498,17 @@ class _Session(telepot.aio.helper.UserHandler):
         self.query_callback = {}
         self.query_id = None
         self.last_sent = None
+
+        # Create dictionary to switch between sending functions
+        self.method = {
+            Media.TEXT: self.sender.sendMessage,
+            Media.STICKER: self.sender.sendSticker,
+            Media.VOICE: self.send_voice,
+            Media.AUDIO: self.send_audio,
+            Media.PHOTO: self.send_photo,
+            Media.VIDEO: self.send_video,
+            Media.DOCUMENT: self.send_document
+        }
 
         logger.info(
             "User {} connected".format(self.user))
@@ -509,7 +630,7 @@ class _Session(telepot.aio.helper.UserHandler):
         else:
             await self.prepare_answer(answer, log)
 
-    async def prepare_answer(self, answer: Union[Answer, Iterable], log: str = "") -> None:
+    async def prepare_answer(self, answer: Union[_Answer, Iterable], log: str = "") -> None:
         """
 
         :param answer:
@@ -525,13 +646,13 @@ class _Session(telepot.aio.helper.UserHandler):
                 return
 
             # Convert into a complex answer to unify processing
-            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType)):
-                answer = Answer(str(answer))
-            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], Answer):
-                answer = Answer(str(answer[0]), *answer[1:])
+            if not isinstance(answer, (_Answer, list, tuple, types.GeneratorType)):
+                answer = _Answer(str(answer))
+            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], _Answer):
+                answer = _Answer(str(answer[0]), *answer[1:])
 
             # Handle complex answer
-            if isinstance(answer, Answer):
+            if isinstance(answer, _Answer):
                 await self.handle_answer((answer,))
 
             # Handle multiple complex answers
@@ -601,70 +722,21 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         if _config_value('bot', 'error_reply', default=None) is not None:
-            await self.prepare_answer(Answer(_config_value('bot', 'error_reply')))
+            await self.prepare_answer(_Answer(_config_value('bot', 'error_reply')))
 
-    async def handle_answer(self, answers: Iterable[Answer]) -> None:
+    async def handle_answer(self, answers: Iterable[_Answer]) -> None:
         """
         Handle Answer objects
         :param answers: Answer objects to be sent
         """
 
-        answer: Answer = None
+        answer: _Answer = None
         for answer in answers:
-            await self.send(answer)
+            sent = await answer.send(self.sender)
+            self.last_sent = answer, sent
 
-    async def send(self, answer: Answer) -> None:
-        """
-        Sends a message back to the user.
-        This either might just be plaintext or another feature like stickers or photos
-        :param answer: The answer to be sent
-        """
-
-        # Delay sending
-        if answer.delay > 0:
-
-            # Define a function to delay a recursive call
-            async def wait():
-                await asyncio.sleep(answer.delay)
-                answer.delay = 0
-                await self.send(answer)
-
-            loop.create_task(wait())
-            return
-
-        # Create dictionary to switch between functions
-        method = {
-            'sticker': self.sender.sendSticker,
-            'photo': self.send_photo,
-            'document': self.send_document,
-            'video': self.send_video,
-            'audio': self.send_audio,
-            'voice': self.send_voice
-        }
-
-        msg = answer.msg
-
-        # Try to detect a relevant command
-        command = ""
-        payload = None
-        caption = None
-        if ":" in msg:
-            command, payload = msg.split(":", 1)
-            if ";" in payload:
-                payload, caption = payload.split(";", 1)
-
-        func: Callable = method.get(command, None)
-
-        # Call the appropriate function
-        if func is not None:
-            sent = await method[command](payload, caption, **answer.get_config())
-        else:
-            sent = await self.sender.sendMessage(msg, **answer.get_config())
-
-        self.last_sent = answer, sent
-
-        if answer.callback is not None:
-            self.query_callback[sent['message_id']] = answer.callback
+            if answer.callback is not None:
+                self.query_callback[sent['message_id']] = answer.callback
 
     async def send_photo(self, file: str, caption: str, **kwargs) -> None:
         """
@@ -712,7 +784,7 @@ class _Session(telepot.aio.helper.UserHandler):
         return await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
 
     @staticmethod
-    async def default_answer() -> Union[str, Answer, Iterable[str], None]:
+    async def default_answer() -> Union[str, _Answer, Iterable[str], None]:
         """
         Sets the default answer function to do nothing if not overwritten
         """
@@ -720,7 +792,7 @@ class _Session(telepot.aio.helper.UserHandler):
         pass
 
     @staticmethod
-    async def default_sticker_answer() -> Union[str, Answer, Iterable[str], None]:
+    async def default_sticker_answer() -> Union[str, _Answer, Iterable[str], None]:
         """
         Sets the default sticker answer function to do nothing if not overwritten
         """

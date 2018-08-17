@@ -13,7 +13,6 @@ class User:
     """
 
     def __init__(self, user: dict):
-
         # Safe all useful information as attributes
         self.id = user.get("id")
         self.is_bot = user.get('is_bot')
@@ -47,7 +46,6 @@ class Sticker:
     """
 
     def __init__(self, sticker: dict):
-
         # Safe all useful information as attributes
         self.emoji = sticker['emoji']
         self.file_id = sticker['file_id']
@@ -188,9 +186,41 @@ class ParsingDict(object):
 
 class Mode(Enum):
     """
-    A Enum to ease the specification of the processing mode of a route
+    An Enum to ease the specification of the processing mode of a route
     """
 
     DEFAULT = 0
+    """The normal text matching"""
+
     REGEX = 1
+    """Matching using a regular expression"""
+
     PARSE = 2
+    """Matching using a python format string"""
+
+
+class Media(Enum):
+    """
+    An Enum to describe the media type of an answer
+    """
+
+    TEXT = 0
+    """A plain text message"""
+
+    STICKER = 1
+    """A telegram sticker"""
+
+    VOICE = 2
+    """A recorded voice"""
+
+    AUDIO = 3
+    """An audio file"""
+
+    PHOTO = 4
+    """A picture"""
+
+    VIDEO = 5
+    """A video"""
+
+    DOCUMENT = 6
+    """Any file for download"""
