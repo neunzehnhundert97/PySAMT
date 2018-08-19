@@ -89,7 +89,7 @@ class Marvin:
         self._configure_logger()
 
         # Config Answer class
-        _Answer.load_defaults()
+        Answer._load_defaults()
 
         # Initialize bot
         self._create_bot()
@@ -209,7 +209,7 @@ class Marvin:
         return func
 
 
-class _Answer(object):
+class Answer(object):
     """
     An object to describe more complex answering behavior
     """
@@ -246,7 +246,7 @@ class _Answer(object):
         self.caption = caption
         self.delay = delay
 
-    async def send(self, sender):
+    async def _send(self, sender):
         """
 
         :param sender:
@@ -254,7 +254,7 @@ class _Answer(object):
         """
 
         msg = self.msg
-        kwargs = self.get_config()
+        kwargs = self._get_config()
 
         if self.media_type == Media.TEXT:
             return await sender.sendMessage(msg,
@@ -373,21 +373,22 @@ class _Answer(object):
 
             # Try to detect a relevant command
             command = ""
-            if ":" in msg and command in ("sticker", "audio", "voice", "document", "photo", "video"):
+            if ":" in msg:
                 command, payload = msg.split(":", 1)
-                if ";" in payload:
-                    self.media, self.caption = payload.split(";", 1)
-                else:
-                    self.media = payload
+                if command in ("sticker", "audio", "voice", "document", "photo", "video"):
+                    if ";" in payload:
+                        self.media, self.caption = payload.split(";", 1)
+                    else:
+                        self.media = payload
 
-                msg = None
-                self._msg = msg
+                    msg = None
+                    self._msg = msg
 
             self.media_type = self.media_commands.get(command, Media.TEXT)
 
         return msg
 
-    def get_config(self) -> Dict[str, Any]:
+    def _get_config(self) -> Dict[str, Any]:
         """
 
         :return: kwargs for the sending of the answer
@@ -453,7 +454,7 @@ class _Answer(object):
         }
 
     @classmethod
-    def load_defaults(cls) -> None:
+    def _load_defaults(cls) -> None:
         """
         Load default values from config
         """
@@ -630,7 +631,7 @@ class _Session(telepot.aio.helper.UserHandler):
         else:
             await self.prepare_answer(answer, log)
 
-    async def prepare_answer(self, answer: Union[_Answer, Iterable], log: str = "") -> None:
+    async def prepare_answer(self, answer: Union[Answer, Iterable], log: str = "") -> None:
         """
 
         :param answer:
@@ -646,13 +647,13 @@ class _Session(telepot.aio.helper.UserHandler):
                 return
 
             # Convert into a complex answer to unify processing
-            if not isinstance(answer, (_Answer, list, tuple, types.GeneratorType)):
-                answer = _Answer(str(answer))
-            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], _Answer):
-                answer = _Answer(str(answer[0]), *answer[1:])
+            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType)):
+                answer = Answer(str(answer))
+            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], Answer):
+                answer = Answer(str(answer[0]), *answer[1:])
 
             # Handle complex answer
-            if isinstance(answer, _Answer):
+            if isinstance(answer, Answer):
                 await self.handle_answer((answer,))
 
             # Handle multiple complex answers
@@ -722,17 +723,17 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         if _config_value('bot', 'error_reply', default=None) is not None:
-            await self.prepare_answer(_Answer(_config_value('bot', 'error_reply')))
+            await self.prepare_answer(Answer(_config_value('bot', 'error_reply')))
 
-    async def handle_answer(self, answers: Iterable[_Answer]) -> None:
+    async def handle_answer(self, answers: Iterable[Answer]) -> None:
         """
         Handle Answer objects
         :param answers: Answer objects to be sent
         """
 
-        answer: _Answer = None
+        answer: Answer = None
         for answer in answers:
-            sent = await answer.send(self.sender)
+            sent = await answer._send(self.sender)
             self.last_sent = answer, sent
 
             if answer.callback is not None:
@@ -784,7 +785,7 @@ class _Session(telepot.aio.helper.UserHandler):
         return await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
 
     @staticmethod
-    async def default_answer() -> Union[str, _Answer, Iterable[str], None]:
+    async def default_answer() -> Union[str, Answer, Iterable[str], None]:
         """
         Sets the default answer function to do nothing if not overwritten
         """
@@ -792,7 +793,7 @@ class _Session(telepot.aio.helper.UserHandler):
         pass
 
     @staticmethod
-    async def default_sticker_answer() -> Union[str, _Answer, Iterable[str], None]:
+    async def default_sticker_answer() -> Union[str, Answer, Iterable[str], None]:
         """
         Sets the default sticker answer function to do nothing if not overwritten
         """

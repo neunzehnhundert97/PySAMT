@@ -1,2 +1,2 @@
-from .marvin import Marvin, _Answer
+from .marvin import Marvin, Answer
 from .helper import *
