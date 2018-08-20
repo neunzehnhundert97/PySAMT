@@ -6,4 +6,6 @@ In this directory you can find a collection of samples to demonstrate the differ
 The following examples are currently available:
 
 * **Echo:** A bot who will send back all received text messages.
-* **Hello:** A bot who will greet the user when first connecting. It will ignore all other meessages.
+* **Hello:** A bot who will greet the user when first connecting. It will ignore all other messages.
+* **Media:** A bot capable of sending files and stickers.
+* **Parsing:** A bot which can perform more complex matchings on incoming messages

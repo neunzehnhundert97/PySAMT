@@ -34,7 +34,7 @@ token = "The token you got by the botfather"
 
 ## Installation
 
-The package is currently not (yet) available on PyPI, but you may download the repository as zip or by using git clone. Then you can use the setup.py to install the module locally by typing ```pip install .``` which is also done by the included install.bat.
+The package is currently not (yet) available on PyPI, but you may download the repository as zip or by using ```git clone```. Then you can use the setup.py to install the module locally by using ```pip install .```.
 
 ## Notes
 

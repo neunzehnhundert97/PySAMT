@@ -6,3 +6,4 @@ tests/*
 
 # Python file
 *.pyc
+*.log

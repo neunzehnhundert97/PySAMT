@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="marvin",
-    version=0.2,
+    version=0.3,
     author="neunzehnhundert97",
     packages=["marvin"],
     classifiers=[

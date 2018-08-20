@@ -39,6 +39,9 @@ class Message:
         self.text = msg.get('text', None)
         self.id = msg['message_id']
 
+    def __str__(self):
+        return self.text
+
 
 class Sticker:
     """

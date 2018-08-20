@@ -5,7 +5,7 @@ bot = Marvin()
 
 @bot.answer("Hello")
 @bot.answer("/start")
-@bot.answer("[Hh]allo", regex=True)
+@bot.answer("Hallo")
 def start():
     return "Hello, new user, how can I help you?"
 

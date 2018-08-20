@@ -1,0 +1,5 @@
+[default]
+unknown = "<i>{}</i> could not be understood.\nTry again."
+
+[de]
+unknown = "<i>{}</i> wurde nicht verstanden.\nVersuchen Sie es erneut."

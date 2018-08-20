@@ -73,17 +73,18 @@ class Marvin:
         # Read configuration
         global _config
         try:
-            _config = _load_configuration("Configuration")
+            _config = _load_configuration("config")
 
         except FileNotFoundError:
             logger.critical("The configuration file could not be found. Please make sure there is a file called " +
-                            "Configuration.toml in the directory config.")
+                            "config.toml in the directory config.")
             quit(-1)
 
         # Read language files
+        # TODO Catch error
         if _config_value('bot', 'implicit_routing', default=False) \
                 or _config_value('bot', 'language_feature', default=False):
-            _Session.language = _load_configuration("Languages")
+            _Session.language = _load_configuration("lang")
 
         # Initialize logger
         self._configure_logger()
@@ -246,11 +247,11 @@ class Answer(object):
         self.caption = caption
         self.delay = delay
 
-    async def _send(self, sender):
+    async def _send(self, sender) -> Dict:
         """
-
-        :param sender:
-        :return:
+        Sends this instance of answer to the user
+        :param sender: The sender of the user's instance of _Session
+        :return : The send message as dictionary
         """
 
         msg = self.msg
@@ -326,13 +327,16 @@ class Answer(object):
 
         # The language code should be something like de, but could be also like de_DE or non-existent
         lang_code = _context.get('user').language_code.split('_')[0].lower()
-        answer = None
+
+        # ToDO Fallback to english
 
         try:
+            # Try to load the string with the given language code
             answer: str = _Session.language[lang_code][self._msg]
 
         except KeyError:
-            # Try to load the answer string
+
+            # Try to load the answer string in the default segment
             try:
                 answer: str = _Session.language['default'][self._msg]
 
@@ -499,17 +503,6 @@ class _Session(telepot.aio.helper.UserHandler):
         self.query_callback = {}
         self.query_id = None
         self.last_sent = None
-
-        # Create dictionary to switch between sending functions
-        self.method = {
-            Media.TEXT: self.sender.sendMessage,
-            Media.STICKER: self.sender.sendSticker,
-            Media.VOICE: self.send_voice,
-            Media.AUDIO: self.send_audio,
-            Media.PHOTO: self.send_photo,
-            Media.VIDEO: self.send_video,
-            Media.DOCUMENT: self.send_document
-        }
 
         logger.info(
             "User {} connected".format(self.user))
@@ -738,51 +731,6 @@ class _Session(telepot.aio.helper.UserHandler):
 
             if answer.callback is not None:
                 self.query_callback[sent['message_id']] = answer.callback
-
-    async def send_photo(self, file: str, caption: str, **kwargs) -> None:
-        """
-        Sends a photo to the user
-        :param file: A path either relative or absolute to the file to send
-        :param caption: The caption to be shown on the media
-        """
-
-        return await self.sender.sendPhoto(open(file, 'rb'), caption, **kwargs)
-
-    async def send_document(self, file: str, caption: str, **kwargs) -> None:
-        """
-        Sends a document to the user
-        :param file: A path either relative or absolute to the file to send
-        :param caption: The caption to be shown on the media
-        """
-
-        return await self.sender.sendDocument(open(file, 'rb'), caption, **kwargs)
-
-    async def send_audio(self, file: str, caption: str, **kwargs) -> None:
-        """
-        Sends a audio to the user
-        :param file: A path either relative or absolute to the file to send
-        :param caption: The caption to be shown on the media
-        """
-
-        return await self.sender.sendAudio(open(file, 'rb'), caption, **kwargs)
-
-    async def send_voice(self, file: str, caption: str, **kwargs) -> None:
-        """
-        Sends a voice to the user
-        :param file: A path either relative or absolute to the file to send
-        :param caption: The caption to be shown on the media
-        """
-
-        return await self.sender.sendVoice(open(file, 'rb'), caption, **kwargs)
-
-    async def send_video(self, file: str, caption: str, **kwargs) -> None:
-        """
-        Sends a video to the user
-        :param file: A path either relative or absolute to the file to send
-        :param caption: The caption to be shown on the media
-        """
-
-        return await self.sender.sendVideo(open(file, 'rb'), caption=caption, **kwargs)
 
     @staticmethod
     async def default_answer() -> Union[str, Answer, Iterable[str], None]:
