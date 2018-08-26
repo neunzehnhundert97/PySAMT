@@ -5,16 +5,19 @@ import traceback
 import types
 from inspect import iscoroutinefunction
 from os import path
-from typing import Dict, Callable, Any, Tuple, Iterable, Union
+from typing import Dict, Callable, Any, Tuple, Iterable, Union, Collection
 
 import aiotask_context as _context
 import math
+
+import collections
 import telepot
 import telepot.aio.delegate
 import toml
 from telepot.aio.loop import MessageLoop
 from telepot.exception import TelegramError
-from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
+    ReplyKeyboardRemove
 
 from marvin.helper import *
 
@@ -226,18 +229,20 @@ class Answer(object):
 
     def __init__(self, msg: str = None,
                  *format_content: Any,
-                 choices: Iterable = None,
+                 choices: Collection = None,
                  callback: Callable = None,
-                 keyboard: Iterable = None,
+                 keyboard: Collection = None,
                  media_type: Media = None,
                  media: str = None,
                  caption: str = None,
+                 receiver: str = None,
                  delay: int = 0):
         """
         :param msg: The message included in this answer
         """
 
         self._msg = msg
+        self._id = receiver
         self.format_content = format_content
         self.choices = choices
         self.callback = callback
@@ -247,18 +252,25 @@ class Answer(object):
         self.caption = caption
         self.delay = delay
 
-    async def _send(self, sender) -> Dict:
+    async def _send(self, session) -> Dict:
         """
         Sends this instance of answer to the user
-        :param sender: The sender of the user's instance of _Session
+        :param session: The user's instance of _Session
         :return : The send message as dictionary
         """
 
+        if self._id is None:
+            ID = session.user_id
+        else:
+            ID = self._id
+            self.mark_as_answer = False
+
+        sender = session.bot
         msg = self.msg
         kwargs = self._get_config()
 
         if self.media_type == Media.TEXT:
-            return await sender.sendMessage(msg,
+            return await sender.sendMessage(ID, msg,
                                             **{key: kwargs[key] for key in kwargs if key in ("parse_mode",
                                                                                              "disable_web_page_preview",
                                                                                              "disable_notification",
@@ -266,13 +278,13 @@ class Answer(object):
                                                                                              "reply_markup")})
 
         elif self.media_type == Media.STICKER:
-            return await sender.sendSticker(self.media,
+            return await sender.sendSticker(ID, self.media,
                                             **{key: kwargs[key] for key in kwargs if key in ('disable_notification',
                                                                                              'reply_to_message_id',
                                                                                              'reply_markup')})
 
         elif self.media_type == Media.VOICE:
-            return await sender.sendVoice(open(self.media, "rb"),
+            return await sender.sendVoice(ID, open(self.media, "rb"),
                                           **{key: kwargs[key] for key in kwargs if key in ("caption",
                                                                                            "parse_mode",
                                                                                            "duration",
@@ -281,7 +293,7 @@ class Answer(object):
                                                                                            "reply_markup")})
 
         elif self.media_type == Media.AUDIO:
-            return await sender.sendAudio(open(self.media, "rb"),
+            return await sender.sendAudio(ID, open(self.media, "rb"),
                                           **{key: kwargs[key] for key in kwargs if key in ("caption",
                                                                                            "parse_mode",
                                                                                            "duration",
@@ -292,7 +304,7 @@ class Answer(object):
                                                                                            "reply_markup")})
 
         elif self.media_type == Media.PHOTO:
-            return await sender.sendPhoto(open(self.media, "rb"),
+            return await sender.sendPhoto(ID, open(self.media, "rb"),
                                           **{key: kwargs[key] for key in kwargs if key in ("caption",
                                                                                            "parse_mode",
                                                                                            "disable_notification",
@@ -300,7 +312,7 @@ class Answer(object):
                                                                                            "reply_markup")})
 
         elif self.media_type == Media.VIDEO:
-            return await sender.sendVideo(open(self.media, "rb"),
+            return await sender.sendVideo(ID, open(self.media, "rb"),
                                           **{key: kwargs[key] for key in kwargs if key in ("duration",
                                                                                            "width",
                                                                                            "height",
@@ -312,7 +324,7 @@ class Answer(object):
                                                                                            "reply_markup")})
 
         elif self.media_type == Media.DOCUMENT:
-            return await sender.sendDocument(open(self.media, "rb"),
+            return await sender.sendDocument(ID, open(self.media, "rb"),
                                              **{key: kwargs[key] for key in kwargs if key in ("caption",
                                                                                               "parse_mode",
                                                                                               "disable_notification",
@@ -327,8 +339,6 @@ class Answer(object):
 
         # The language code should be something like de, but could be also like de_DE or non-existent
         lang_code = _context.get('user').language_code.split('_')[0].lower()
-
-        # ToDO Fallback to english
 
         try:
             # Try to load the string with the given language code
@@ -399,6 +409,7 @@ class Answer(object):
         """
 
         if self.choices is not None:
+
             # In the case of 1-dimensional array
             # align the options in pairs of 2
             if isinstance(self.choices[0], str):
@@ -423,28 +434,35 @@ class Answer(object):
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
         elif self.keyboard is not None:
-            # In the case of 1-dimensional array
-            # align the options in pairs of 2
-            if isinstance(self.keyboard[0], str):
-                self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
-                                range(int(math.ceil(len(self.choices) / 2)))]
 
-            # Prepare button array
-            buttons = []
+            # For anything except a collections, any previous sent keyboard is deleted
+            if not isinstance(self.keyboard, collections.Iterable):
+                keyboard = ReplyKeyboardRemove()
 
-            # Loop over all rows
-            for row in self.keyboard:
-                r = []
-                # Loop over each entry
-                for text in row:
-                    # Append the text as a new button
-                    r.append(KeyboardButton(
-                        text=text))
-                # Append the button row to the list
-                buttons.append(r)
+            else:
 
-            # Assemble keyboard
-            keyboard = ReplyKeyboardMarkup(keyboard=buttons, one_time_keyboard=True)
+                # In the case of 1-dimensional array
+                # align the options in pairs of 2
+                if isinstance(self.keyboard[0], str):
+                    self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
+                                    range(int(math.ceil(len(self.choices) / 2)))]
+
+                # Prepare button array
+                buttons = []
+
+                # Loop over all rows
+                for row in self.keyboard:
+                    r = []
+                    # Loop over each entry
+                    for text in row:
+                        # Append the text as a new button
+                        r.append(KeyboardButton(
+                            text=text))
+                    # Append the button row to the list
+                    buttons.append(r)
+
+                # Assemble keyboard
+                keyboard = ReplyKeyboardMarkup(keyboard=buttons, one_time_keyboard=True)
         else:
             keyboard = None
 
@@ -726,7 +744,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         answer: Answer = None
         for answer in answers:
-            sent = await answer._send(self.sender)
+            sent = await answer._send(self)
             self.last_sent = answer, sent
 
             if answer.callback is not None:
