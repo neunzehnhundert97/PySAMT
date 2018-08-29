@@ -3,7 +3,7 @@ import logging
 import sys
 import traceback
 import types
-from inspect import iscoroutinefunction
+from inspect import iscoroutinefunction, isgeneratorfunction
 from os import path
 from typing import Dict, Callable, Any, Tuple, Iterable, Union, Collection
 
@@ -116,8 +116,7 @@ class Marvin:
         # Creates the forever running bot listening function as task
         loop.create_task(MessageLoop(self._bot).run_forever(timeout=10))
 
-        if self._on_startup is not None:
-            loop.create_task(self._on_startup())
+        loop.create_task(self.schedule_startup())
 
         # Start the event loop to never end (of itself)
         loop.run_forever()
@@ -217,6 +216,23 @@ class Marvin:
         _Session.default_sticker_answer = func
         return func
 
+    async def schedule_startup(self):
+        """
+
+        """
+
+        class Dummy:
+            pass
+
+        dummy = Dummy()
+        dummy.user_id = None
+        dummy.bot = self._bot
+
+        if self._on_startup is not None:
+            async for answer in self._on_startup():
+                answer.language_feature = False
+                await answer._send(dummy)
+
     def on_startup(self, func: types.CoroutineType):
         """
         A decorator for a function to be awaited on the program's startup
@@ -225,10 +241,7 @@ class Marvin:
         """
 
         # Remember the function
-        if iscoroutinefunction(func):
-            self._on_startup = func
-        else:
-            raise TypeError("The startup function must be a coroutine")
+        self._on_startup = func
 
 
 class Answer(object):
