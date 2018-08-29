@@ -89,6 +89,8 @@ class Marvin:
                 or _config_value('bot', 'language_feature', default=False):
             _Session.language = _load_configuration("lang")
 
+        self._on_startup = None
+
         # Initialize logger
         self._configure_logger()
 
@@ -113,6 +115,9 @@ class Marvin:
 
         # Creates the forever running bot listening function as task
         loop.create_task(MessageLoop(self._bot).run_forever(timeout=10))
+
+        if self._on_startup is not None:
+            loop.create_task(self._on_startup())
 
         # Start the event loop to never end (of itself)
         loop.run_forever()
@@ -212,10 +217,23 @@ class Marvin:
         _Session.default_sticker_answer = func
         return func
 
+    def on_startup(self, func: types.CoroutineType):
+        """
+        A decorator for a function to be awaited on the program's startup
+        :param func:
+        :return: The unchanged function
+        """
+
+        # Remember the function
+        if iscoroutinefunction(func):
+            self._on_startup = func
+        else:
+            raise TypeError("The startup function must be a coroutine")
+
 
 class Answer(object):
     """
-    An object to describe more complex answering behavior
+    An object to describe the message behavior
     """
 
     media_commands = {
@@ -259,6 +277,7 @@ class Answer(object):
         :return : The send message as dictionary
         """
 
+        # Load the recipient's id
         if self._id is None:
             ID = session.user_id
         else:
@@ -269,6 +288,7 @@ class Answer(object):
         msg = self.msg
         kwargs = self._get_config()
 
+        # Call the correct method for sending the desired media type and filter the relevant kwargs
         if self.media_type == Media.TEXT:
             return await sender.sendMessage(ID, msg,
                                             **{key: kwargs[key] for key in kwargs if key in ("parse_mode",
@@ -644,10 +664,9 @@ class _Session(telepot.aio.helper.UserHandler):
 
     async def prepare_answer(self, answer: Union[Answer, Iterable], log: str = "") -> None:
         """
-
-        :param answer:
-        :param log:
-        :return:
+        Prepares the returned object to be processed later on
+        :param answer: The answer to be given
+        :param log: A logging string
         """
 
         try:
@@ -764,4 +783,10 @@ class _Session(telepot.aio.helper.UserHandler):
         Sets the default sticker answer function to do nothing if not overwritten
         """
 
+        pass
+
+
+class Questionnaire(object):
+
+    def __init__(self):
         pass
