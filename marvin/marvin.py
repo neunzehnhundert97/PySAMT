@@ -1,15 +1,14 @@
 import asyncio
 import logging
+import math
 import sys
 import traceback
 import types
-from inspect import iscoroutinefunction
+from inspect import iscoroutinefunction, isgenerator, isasyncgen
 from os import path
 from typing import Dict, Callable, Tuple, Iterable, Union, Collection
 
 import aiotask_context as _context
-import math
-
 import collections
 import telepot
 import telepot.aio.delegate
@@ -300,7 +299,6 @@ class Answer(object):
         self.media_type: Media = media_type
         self.media = media
         self.caption = caption
-        self.delay = delay
 
     async def _send(self, session) -> Dict:
         """
@@ -585,6 +583,8 @@ class _Session(telepot.aio.helper.UserHandler):
         self.query_callback = {}
         self.query_id = None
         self.last_sent = None
+        self.gen = None
+        self.gen_is_async = None
 
         logger.info(
             "User {} connected".format(self.user))
@@ -659,6 +659,12 @@ class _Session(telepot.aio.helper.UserHandler):
         args: Tuple = ()
         kwargs: Dict = {}
 
+        # If a generator is defined, handle it the message and return if it did not stop
+        if self.gen is not None and text != _config_value('bot', 'cancel_command', default="/cancel"):
+            # Call the generator and abort if he worked
+            if await self.handle_generator(msg=text):
+                return
+
         # If a callback is defined and the text does not match the defined cancel command,
         # the callback function is called
         if self.callback is not None and text != _config_value('bot', 'cancel_command', default="/cancel"):
@@ -727,19 +733,17 @@ class _Session(telepot.aio.helper.UserHandler):
                 logger.info(log + "\nNo answer was given")
                 return
 
-            # Convert into a complex answer to unify processing
-            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType, types.AsyncGeneratorType)):
-                answer = Answer(str(answer))
-            elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], Answer):
-                answer = Answer(str(answer[0]), *answer[1:])
+            if isinstance(answer, (tuple, list)):
+                if isinstance(answer[0], str):
+                    await self.handle_answer([Answer(str(answer[0]), *answer[1:])])
 
-            # Handle complex answer
-            if isinstance(answer, Answer):
-                await self.handle_answer((answer,))
+            elif isgenerator(answer) or isasyncgen(answer):
+                self.gen = answer
+                self.gen_is_async = isasyncgen(answer)
+                await self.handle_generator(first_call=True)
 
-            # Handle multiple complex answers
-            elif isinstance(answer, (tuple, list, types.GeneratorType, types.AsyncGeneratorType)):
-                await self.handle_answer(answer)
+            else:
+                await self.handle_answer([answer])
 
         except FileNotFoundError as e:
             err = '\n\tThe request could not be fulfilled as the file "{}" could not be found'.format(e.filename)
@@ -812,27 +816,52 @@ class _Session(telepot.aio.helper.UserHandler):
         :param answers: Answer objects to be sent
         """
 
-        answer: Answer = None
-        if isinstance(answers, types.AsyncGeneratorType):
-            async for answer in answers:
-                sent = await answer._send(self)
-                self.last_sent = answer, sent
+        # Iterate over answers
+        for answer in answers:
+            if not isinstance(answer, Answer):
+                answer = Answer(str(answer))
 
-                if answer.callback is not None:
-                    if answer.is_query():
-                        self.query_callback[sent['message_id']] = answer.callback
-                    else:
-                        self.callback = answer.callback
+            sent = await answer._send(self)
+            self.last_sent = answer, sent
+
+            if answer.callback is not None:
+                if answer.is_query():
+                    self.query_callback[sent['message_id']] = answer.callback
+                else:
+                    self.callback = answer.callback
+
+    async def handle_generator(self, msg=None, first_call=False):
+        """
+        Performs one iteration on the generator
+        :param msg: The message to be sent into the generator
+        :param first_call: If this is the initial call to the generator
+        """
+
+        # Wrap the whole process into a try to except the end of iteration exception
+        try:
+
+            # On first call, None has to be inserted
+            if first_call:
+                if self.gen_is_async:
+                    answer = await self.gen.asend(None)
+                else:
+                    answer = self.gen.send(None)
+
+            # On the following calls, the message is inserted
+            else:
+                if self.gen_is_async:
+                    answer = await self.gen.asend(msg)
+                else:
+                    answer = self.gen.send(msg)
+
+            await self.prepare_answer(answer)
+
+        # Return if the iterator worked properly
+        except (StopIteration, StopAsyncIteration):
+            self.gen = None
+            return False
         else:
-            for answer in answers:
-                sent = await answer._send(self)
-                self.last_sent = answer, sent
-
-                if answer.callback is not None:
-                    if answer.is_query():
-                        self.query_callback[sent['message_id']] = answer.callback
-                    else:
-                        self.callback = answer.callback
+            return True
 
     @staticmethod
     async def default_answer() -> Union[str, Answer, Iterable[str], None]:
