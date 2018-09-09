@@ -89,7 +89,7 @@ class Marvin:
                                 "lang.toml in the directory config or disable this feature.")
                 quit(-1)
 
-        # Prepare empty startup generator
+        # Prepare empty stubs
         self._on_startup = None
 
         # Config Answer class
@@ -241,11 +241,24 @@ class Marvin:
         """
         A decorator for a function to be awaited on the program's startup
         :param func:
-        :return: The unchanged function
         """
 
         # Remember the function
         self._on_startup = func
+
+    @staticmethod
+    def before_processing(func: Callable):
+        """
+        A decorator for a function, which shall be called before each message procession
+        :param func:
+        :return:
+        """
+
+        Marvin._before_function = func
+
+    @staticmethod
+    def _before_function():
+        return True
 
 
 class Answer(object):
@@ -635,6 +648,9 @@ class _Session(telepot.aio.helper.UserHandler):
         The function which will be called by telepot
         :param msg: The received message as dictionary
         """
+
+        if not Marvin._before_function():
+            return
 
         # Tests, if it is normal message or something special
         if 'text' in msg:
