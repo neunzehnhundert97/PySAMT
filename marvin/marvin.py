@@ -3,9 +3,9 @@ import logging
 import sys
 import traceback
 import types
-from inspect import iscoroutinefunction, isgeneratorfunction
+from inspect import iscoroutinefunction
 from os import path
-from typing import Dict, Callable, Any, Tuple, Iterable, Union, Collection
+from typing import Dict, Callable, Tuple, Iterable, Union, Collection
 
 import aiotask_context as _context
 import math
@@ -51,18 +51,14 @@ def _config_value(*keys, default: Any = None) -> Any:
             # Try to go one step deeper
             step = step[key]
 
-        # A keyerror will abort the operation and return the default value
+        # A key error will abort the operation and return the default value
         except KeyError:
             return default
 
     return step
 
 
-def _handle_exit(signum, frame):
-    print(type(signum))
-    print(type(frame))
-
-
+# noinspection PyProtectedMember
 class Marvin:
     """
     The main class of this framework
@@ -77,22 +73,25 @@ class Marvin:
         global _config
         try:
             _config = _load_configuration("config")
-
         except FileNotFoundError:
             logger.critical("The configuration file could not be found. Please make sure there is a file called " +
                             "config.toml in the directory config.")
             quit(-1)
 
-        # Read language files
-        # TODO Catch error
-        if _config_value('bot', 'implicit_routing', default=False) \
-                or _config_value('bot', 'language_feature', default=False):
-            _Session.language = _load_configuration("lang")
-
-        self._on_startup = None
-
         # Initialize logger
         self._configure_logger()
+
+        # Read language files
+        if _config_value('bot', 'language_feature', default=False):
+            try:
+                _Session.language = _load_configuration("lang")
+            except FileNotFoundError:
+                logger.critical("The language file could not be found. Please make sure there is a file called " +
+                                "lang.toml in the directory config or disable this feature.")
+                quit(-1)
+
+        # Prepare empty startup generator
+        self._on_startup = None
 
         # Config Answer class
         Answer._load_defaults()
@@ -116,6 +115,7 @@ class Marvin:
         # Creates the forever running bot listening function as task
         loop.create_task(MessageLoop(self._bot).run_forever(timeout=10))
 
+        # Create the startup as a separated task
         loop.create_task(self.schedule_startup())
 
         # Start the event loop to never end (of itself)
@@ -218,7 +218,7 @@ class Marvin:
 
     async def schedule_startup(self):
         """
-
+        If defined, executes the startup generator and processes the yielded answers
         """
 
         class Dummy:
@@ -228,8 +228,13 @@ class Marvin:
         dummy.user_id = None
         dummy.bot = self._bot
 
-        if self._on_startup is not None:
-            async for answer in self._on_startup():
+        if self._on_startup is None:
+            return
+
+        gen = self._on_startup()
+
+        if isinstance(gen, types.AsyncGeneratorType):
+            async for answer in gen:
                 answer.language_feature = False
                 await answer._send(dummy)
 
@@ -266,14 +271,28 @@ class Answer(object):
                  media_type: Media = None,
                  media: str = None,
                  caption: str = None,
-                 receiver: str = None,
-                 delay: int = 0):
+                 receiver: Union[str, int, User] = None):
         """
-        :param msg: The message included in this answer
+        Initializes the answer object
+        :param msg: The message to be sent, this can be a language key or a command for a media type
+        :param format_content: If the message is a language key, the format arguments might be supplied here
+        :param choices: The choices to be presented the user as a query, either as Collection of strings, which will
+            automatically be aligned or as a Collection of Collection of strings to control the alignment. This argument
+            being not None is the indicator of being a query
+        :param callback: The function to be called with the next incoming message by this user. The message will be
+            propagated as parameter.
+        :param keyboard: A keyboard to be sent, either as Collection of strings, which will
+            automatically be aligned or as a Collection of Collection of strings to control the alignment.
+        :param media_type: The media type of this answer. Can be used instead of the media commands.
+        :param media: The path to the media to be sent. Can be used instead of the media commands.
+        :param caption: The caption to be sent. Can be used instead of the media commands.
+        :param receiver: The user ID or a user object of the user who should receiver this answer. Will default to the
+            user who sent the triggering message.
+        :param delay:
         """
 
         self._msg = msg
-        self._id = receiver
+        self.receiver = receiver
         self.format_content = format_content
         self.choices = choices
         self.callback = callback
@@ -291,11 +310,14 @@ class Answer(object):
         """
 
         # Load the recipient's id
-        if self._id is None:
+        if self.receiver is None:
             ID = session.user_id
         else:
-            ID = self._id
+            ID = self.receiver
             self.mark_as_answer = False
+
+            if isinstance(ID, User):
+                ID = ID.id
 
         sender = session.bot
         msg = self.msg
@@ -402,6 +424,14 @@ class Answer(object):
         # Write back
         return answer
 
+    def is_query(self) -> bool:
+        """
+        Determines if the answer contains/is a query
+        :return: A boolean answering the call
+        """
+
+        return self.choices is not None
+
     @property
     def msg(self) -> str:
         """
@@ -437,7 +467,7 @@ class Answer(object):
 
     def _get_config(self) -> Dict[str, Any]:
         """
-
+        Gets the kwargs for the sending methods.
         :return: kwargs for the sending of the answer
         """
 
@@ -551,6 +581,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Create dictionary to use as persistent storage
         self.storage = dict()
+        self.callback = None
         self.query_callback = {}
         self.query_id = None
         self.last_sent = None
@@ -628,8 +659,15 @@ class _Session(telepot.aio.helper.UserHandler):
         args: Tuple = ()
         kwargs: Dict = {}
 
+        # If a callback is defined and the text does not match the defined cancel command,
+        # the callback function is called
+        if self.callback is not None and text != _config_value('bot', 'cancel_command', default="/cancel"):
+            func = self.callback
+            self.callback = None
+            args = [text]
+
         # Check, if the message is covered by one of the known simple routes
-        if text in _Session.simple_routes:
+        elif text in _Session.simple_routes:
             func = _Session.simple_routes[text]
 
         # Check, if the message is covered by one of the known parse routes
@@ -690,7 +728,7 @@ class _Session(telepot.aio.helper.UserHandler):
                 return
 
             # Convert into a complex answer to unify processing
-            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType)):
+            if not isinstance(answer, (Answer, list, tuple, types.GeneratorType, types.AsyncGeneratorType)):
                 answer = Answer(str(answer))
             elif isinstance(answer, (tuple, list)) and not isinstance(answer[0], Answer):
                 answer = Answer(str(answer[0]), *answer[1:])
@@ -700,7 +738,7 @@ class _Session(telepot.aio.helper.UserHandler):
                 await self.handle_answer((answer,))
 
             # Handle multiple complex answers
-            elif isinstance(answer, (tuple, list, types.GeneratorType)):
+            elif isinstance(answer, (tuple, list, types.GeneratorType, types.AsyncGeneratorType)):
                 await self.handle_answer(answer)
 
         except FileNotFoundError as e:
@@ -775,12 +813,26 @@ class _Session(telepot.aio.helper.UserHandler):
         """
 
         answer: Answer = None
-        for answer in answers:
-            sent = await answer._send(self)
-            self.last_sent = answer, sent
+        if isinstance(answers, types.AsyncGeneratorType):
+            async for answer in answers:
+                sent = await answer._send(self)
+                self.last_sent = answer, sent
 
-            if answer.callback is not None:
-                self.query_callback[sent['message_id']] = answer.callback
+                if answer.callback is not None:
+                    if answer.is_query():
+                        self.query_callback[sent['message_id']] = answer.callback
+                    else:
+                        self.callback = answer.callback
+        else:
+            for answer in answers:
+                sent = await answer._send(self)
+                self.last_sent = answer, sent
+
+                if answer.callback is not None:
+                    if answer.is_query():
+                        self.query_callback[sent['message_id']] = answer.callback
+                    else:
+                        self.callback = answer.callback
 
     @staticmethod
     async def default_answer() -> Union[str, Answer, Iterable[str], None]:
@@ -788,18 +840,8 @@ class _Session(telepot.aio.helper.UserHandler):
         Sets the default answer function to do nothing if not overwritten
         """
 
-        pass
-
     @staticmethod
     async def default_sticker_answer() -> Union[str, Answer, Iterable[str], None]:
         """
         Sets the default sticker answer function to do nothing if not overwritten
         """
-
-        pass
-
-
-class Questionnaire(object):
-
-    def __init__(self):
-        pass
