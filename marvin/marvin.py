@@ -616,6 +616,10 @@ class _Session(telepot.aio.helper.UserHandler):
         The function which will be called by telepot if the incoming message is a callback query
         """
 
+        # Acknowledge the received query
+        # (The waiting circle in the user's application will disappear)
+        await self.bot.answerCallbackQuery(query['id'])
+
         # Look for a matching callback and execute it
         answer = None
         func = self.query_callback.pop(query['message']['message_id'], None)
@@ -624,10 +628,8 @@ class _Session(telepot.aio.helper.UserHandler):
                 answer = await func(query['data'])
             else:
                 answer = func(query['data'])
-
-        # Acknowledge the received query
-        # (The waiting circle in the user's application will disappear)
-        await self.bot.answerCallbackQuery(query['id'])
+        elif self.gen is not None:
+            await self.handle_generator(msg=query['data'])
 
         # Replace the query to prevent multiple activations
         if _config_value('query', 'replace_query', default=True):
