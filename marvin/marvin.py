@@ -649,6 +649,8 @@ class _Session(telepot.aio.helper.UserHandler):
         :param msg: The received message as dictionary
         """
 
+        # Set the user information
+        _context.set('user', self.user)
         if not Marvin._before_function():
             return
 
@@ -669,21 +671,24 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Prepare the context
         _context.set('message', Message(msg))
-        _context.set('user', self.user)
         _context.set('_<[storage]>_', self.storage)
 
         args: Tuple = ()
         kwargs: Dict = {}
 
+        if text == _config_value('bot', 'cancel_command', default="/cancel"):
+            self.gen = None
+            self.callback = None
+
         # If a generator is defined, handle it the message and return if it did not stop
-        if self.gen is not None and text != _config_value('bot', 'cancel_command', default="/cancel"):
+        if self.gen is not None:
             # Call the generator and abort if he worked
             if await self.handle_generator(msg=text):
                 return
 
         # If a callback is defined and the text does not match the defined cancel command,
         # the callback function is called
-        if self.callback is not None and text != _config_value('bot', 'cancel_command', default="/cancel"):
+        if self.callback is not None:
             func = self.callback
             self.callback = None
             args = [text]
