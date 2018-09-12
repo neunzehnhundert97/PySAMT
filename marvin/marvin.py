@@ -651,11 +651,6 @@ class _Session(telepot.aio.helper.UserHandler):
         :param msg: The received message as dictionary
         """
 
-        # Set the user information
-        _context.set('user', self.user)
-        if not Marvin._before_function():
-            return
-
         # Tests, if it is normal message or something special
         if 'text' in msg:
             await self.handle_text_message(msg)
@@ -672,8 +667,13 @@ class _Session(telepot.aio.helper.UserHandler):
         log = f'Message by {self.user}: "{text}"'
 
         # Prepare the context
+        _context.set('user', self.user)
         _context.set('message', Message(msg))
         _context.set('_<[storage]>_', self.storage)
+
+        # Calls the preprocessing function
+        if not Marvin._before_function():
+            return
 
         args: Tuple = ()
         kwargs: Dict = {}
