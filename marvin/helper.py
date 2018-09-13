@@ -63,6 +63,16 @@ class Context:
     """
 
     @staticmethod
+    def user() -> User:
+        """Shortcut for the sake of convenience"""
+        return Context.get('user')
+
+    @staticmethod
+    def message() -> Message:
+        """Shortcut for the sake of convenience"""
+        return Context.get('message')
+
+    @staticmethod
     def get(key: Hashable, default=None) -> Any:
         """
         Retrieves an value of the async context or the session storage in this order
