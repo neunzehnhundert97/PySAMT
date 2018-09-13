@@ -112,7 +112,7 @@ class Marvin:
         loop.set_task_factory(_context.copying_task_factory)
 
         # Creates the forever running bot listening function as task
-        loop.create_task(MessageLoop(self._bot).run_forever(timeout=10))
+        loop.create_task(MessageLoop(self._bot).run_forever(timeout=None))
 
         # Create the startup as a separated task
         loop.create_task(self.schedule_startup())
