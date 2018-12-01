@@ -486,7 +486,7 @@ class Answer(object):
 
             # In the case of 1-dimensional array
             # align the options in pairs of 2
-            if isinstance(self.choices[0], str):
+            if isinstance(self.choices[0], (str, tuple)):
                 self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
                                 range(int(math.ceil(len(self.choices) / 2)))]
 
@@ -499,8 +499,13 @@ class Answer(object):
                 # Loop over each entry
                 for text in row:
                     # Append the text as a new button
-                    r.append(InlineKeyboardButton(
-                        text=text, callback_data=text))
+                    if isinstance(text, str):
+                        r.append(InlineKeyboardButton(
+                            text=text, callback_data=text))
+                    else:
+                        r.append(InlineKeyboardButton(
+                            text=text[0], callback_data=text[1]))
+
                 # Append the button row to the list
                 buttons.append(r)
 
@@ -509,7 +514,7 @@ class Answer(object):
 
         elif self.keyboard is not None:
 
-            # For anything except a collections, any previous sent keyboard is deleted
+            # For anything except a collection, any previous sent keyboard is deleted
             if not isinstance(self.keyboard, collections.Iterable):
                 keyboard = ReplyKeyboardRemove()
 
@@ -518,8 +523,8 @@ class Answer(object):
                 # In the case of 1-dimensional array
                 # align the options in pairs of 2
                 if isinstance(self.keyboard[0], str):
-                    self.choices = [[y for y in self.choices[x * 2:(x + 1) * 2]] for x in
-                                    range(int(math.ceil(len(self.choices) / 2)))]
+                    self.keyboard = [[y for y in self.keyboard[x * 2:(x + 1) * 2]] for x in
+                                     range(int(math.ceil(len(self.keyboard) / 2)))]
 
                 # Prepare button array
                 buttons = []
@@ -796,7 +801,7 @@ class _Session(telepot.aio.helper.UserHandler):
             err = traceback.extract_tb(sys.exc_info()[2])[-1]
             err = "\n\tDuring the sending of the bot's answer occured an error\n\t\tError message: {}\n\t\tFile: {}" \
                   "\n\t\tFunc: {}\n\t\tLiNo: {}\n\t\tLine: {}\n\tNothing was returned to the user" \
-                  "\n\tYou may report this bug as it either should not have occured" \
+                  "\n\tYou may report this bug as it either should not have occured " \
                   "or should have been properly caught" \
                 .format(msg, err.filename.split("/")[-1], err.name, err.lineno, err.line)
             logger.warning(log + err)
