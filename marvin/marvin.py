@@ -4,6 +4,7 @@ import math
 import sys
 import traceback
 import types
+from collections import deque
 from inspect import iscoroutinefunction, isgenerator, isasyncgen
 from os import path
 from typing import Dict, Callable, Tuple, Iterable, Union, Collection
@@ -283,7 +284,8 @@ class Answer(object):
                  media_type: Media = None,
                  media: str = None,
                  caption: str = None,
-                 receiver: Union[str, int, User] = None):
+                 receiver: Union[str, int, User] = None,
+                 edit_id: int = None):
         """
         Initializes the answer object
         :param msg: The message to be sent, this can be a language key or a command for a media type
@@ -300,7 +302,7 @@ class Answer(object):
         :param caption: The caption to be sent. Can be used instead of the media commands.
         :param receiver: The user ID or a user object of the user who should receiver this answer. Will default to the
             user who sent the triggering message.
-        :param delay:
+        :param edit_id: The ID of the message whose text shall be updated.
         """
 
         self._msg = msg
@@ -312,6 +314,7 @@ class Answer(object):
         self.media_type: Media = media_type
         self.media = media
         self.caption = caption
+        self.edit_id = edit_id
 
     async def _send(self, session) -> Dict:
         """
@@ -333,6 +336,14 @@ class Answer(object):
         sender = session.bot
         msg = self.msg
         kwargs = self._get_config()
+
+        # Check for a request for editing
+        if self.edit_id is not None:
+            return await sender.editMessageText((ID, self.edit_id), msg,
+                                                **{key: kwargs[key] for key in kwargs if key in ("parse_mode",
+                                                                                                 "disable_web_page_preview",
+                                                                                                 "reply_markup")}
+                                                )
 
         # Call the correct method for sending the desired media type and filter the relevant kwargs
         if self.media_type == Media.TEXT:
@@ -604,6 +615,9 @@ class _Session(telepot.aio.helper.UserHandler):
         self.gen = None
         self.gen_is_async = None
 
+        # Prepare dequeue to store sent messages' IDs
+        _context.set("history", deque(maxlen=_config_value("bot", "max_history_entries", default=10)))
+
         logger.info(
             "User {} connected".format(self.user))
 
@@ -851,6 +865,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
             sent = await answer._send(self)
             self.last_sent = answer, sent
+            _context.get("history").append(Message(sent))
 
             if answer.callback is not None:
                 if answer.is_query():
