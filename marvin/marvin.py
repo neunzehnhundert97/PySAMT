@@ -865,7 +865,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
             sent = await answer._send(self)
             self.last_sent = answer, sent
-            _context.get("history").append(Message(sent))
+            _context.get("history").appendleft(Message(sent))
 
             if answer.callback is not None:
                 if answer.is_query():
