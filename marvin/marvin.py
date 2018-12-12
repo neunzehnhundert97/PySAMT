@@ -235,7 +235,7 @@ class Marvin:
 
         if isinstance(gen, types.AsyncGeneratorType):
             async for answer in gen:
-                answer.language_feature = False
+                # answer.language_feature = False
                 await answer._send(dummy)
 
     def on_startup(self, func: types.CoroutineType):
@@ -415,7 +415,8 @@ class Answer(object):
         """
 
         # The language code should be something like de, but could be also like de_DE or non-existent
-        lang_code = _context.get('user').language_code.split('_')[0].lower()
+        usr = _context.get('user')
+        lang_code = usr.language_code.split('_')[0].lower() if usr is not None else "en"
 
         try:
             # Try to load the string with the given language code
@@ -558,7 +559,8 @@ class Answer(object):
 
         return {
             'parse_mode': self.markup,
-            'reply_to_message_id': _context.get('message').id if self.mark_as_answer else None,
+            'reply_to_message_id': _context.get('message').id if self.mark_as_answer and _context.get(
+                'message') is not None else None,
             'disable_web_page_preview': self.disable_web_preview,
             'disable_notification': self.disable_notification,
             'reply_markup': keyboard,
