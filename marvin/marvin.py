@@ -777,15 +777,20 @@ class _Session(telepot.aio.helper.UserHandler):
                 logger.info(log + "\nNo answer was given")
                 return
 
+            # Handle multiple strings or answers as return
             if isinstance(answer, (tuple, list)):
                 if isinstance(answer[0], str):
                     await self.handle_answer([Answer(str(answer[0]), *answer[1:])])
+                elif isinstance(answer[0], Answer):
+                    await self.handle_answer(answer)
 
+            # Handle a generator
             elif isgenerator(answer) or isasyncgen(answer):
                 self.gen = answer
                 self.gen_is_async = isasyncgen(answer)
                 await self.handle_generator(first_call=True)
 
+            # Handle a single answer
             else:
                 await self.handle_answer([answer])
 
