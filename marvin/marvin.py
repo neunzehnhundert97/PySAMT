@@ -659,7 +659,7 @@ class _Session(telepot.aio.helper.UserHandler):
                                            # the user clicks on old queries
                                            text=("{}\n<b>{}</b>" if self.last_sent[
                                                                         0].markup == "HTML" else "{}\n**{}**").format(
-                                               self.last_sent[0].msg, query['data']),
+                                               query['message']['text'], query['data']),
                                            parse_mode=self.last_sent[0].markup)
 
         # Process answer
