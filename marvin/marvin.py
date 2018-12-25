@@ -1,13 +1,14 @@
 import asyncio
 import logging
 import math
+import platform
 import signal
 import sys
 import traceback
 import types
 from collections import deque
 from inspect import iscoroutinefunction, isgenerator, isasyncgen
-from os import path
+from os import path, system
 from typing import Dict, Callable, Tuple, Iterable, Union, Collection
 
 import aiotask_context as _context
@@ -261,6 +262,34 @@ class Marvin:
 
         cls._on_termination = func
 
+    @classmethod
+    def on_message_overflow(cls, func):
+        """
+        A decorator for a function to be called when a message exceeds the maximal length
+        :param func:
+        """
+
+        cls._on_message_overflow = func
+
+    @staticmethod
+    def _on_message_overflow(answer):
+        """
+
+        :param answer:
+        :return: A tuple with a new message, media type, and media
+        """
+
+        with open("Temp" + str(hash(answer)) + ".txt", "w") as f:
+            f.write(answer.msg + "\n")
+
+        # Schedule removal of the temp file after 5 seconds
+        if platform.system() == "Windows":
+            system('start /B cmd /C "sleep 5 && del Temp' + str(hash(answer)) + '.txt"')
+        else:
+            system('bash -c "sleep 5; rm Temp' + str(hash(answer)) + '.txt" &')
+
+        return "", Media.DOCUMENT, "Temp" + str(hash(answer)) + ".txt"
+
     @staticmethod
     def signal_handler(sig, frame):
         """
@@ -360,6 +389,11 @@ class Answer(object):
         sender = session.bot
         msg = self.msg
         kwargs = self._get_config()
+
+        # Catch a to long message text
+        if len(msg) > 4096:
+            # raise AttributeError("Message exceeds maximum length.")
+            msg, self.media_type, self.media = Marvin._on_message_overflow(self)
 
         # Check for a request for editing
         if self.edit_id is not None:
