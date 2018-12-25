@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import signal
 import sys
 import traceback
 import types
@@ -64,6 +65,8 @@ class Marvin:
     The main class of this framework
     """
 
+    _on_termination = lambda: None
+
     def __init__(self):
         """
         Initialize the framework using the configuration file(s)
@@ -89,6 +92,8 @@ class Marvin:
                 logger.critical("The language file could not be found. Please make sure there is a file called " +
                                 "lang.toml in the directory config or disable this feature.")
                 quit(-1)
+
+        signal.signal(signal.SIGINT, Marvin.signal_handler)
 
         # Prepare empty stubs
         self._on_startup = None
@@ -246,6 +251,25 @@ class Marvin:
 
         # Remember the function
         self._on_startup = func
+
+    @classmethod
+    def on_termination(cls, func):
+        """
+        A decorator for a function to be called on the program's termination
+        :param func:
+        """
+
+        cls._on_termination = func
+
+    @staticmethod
+    def signal_handler(sig, frame):
+        """
+        A signal handler to catch a termination via CTR-C
+        """
+
+        Marvin._on_termination()
+        logger.info("Bot shuts down")
+        quit(0)
 
     @staticmethod
     def before_processing(func: Callable):
