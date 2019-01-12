@@ -391,7 +391,7 @@ class Answer(object):
         kwargs = self._get_config()
 
         # Catch a to long message text
-        if self.media_type and len(msg) > 4096:
+        if self.media_type == Media.TEXT and len(msg) > 4096:
             msg, self.media_type, self.media = Marvin._on_message_overflow(self)
 
         # Check for a request for editing
