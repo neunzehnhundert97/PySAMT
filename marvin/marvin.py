@@ -275,7 +275,7 @@ class Marvin:
     def _on_message_overflow(answer):
         """
 
-        :param answer:
+        :param answer: The answer which exceeded the maximal length
         :return: A tuple with a new message, media type, and media
         """
 
@@ -391,8 +391,7 @@ class Answer(object):
         kwargs = self._get_config()
 
         # Catch a to long message text
-        if len(msg) > 4096:
-            # raise AttributeError("Message exceeds maximum length.")
+        if self.media_type and len(msg) > 4096:
             msg, self.media_type, self.media = Marvin._on_message_overflow(self)
 
         # Check for a request for editing
