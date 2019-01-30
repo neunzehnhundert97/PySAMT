@@ -99,6 +99,9 @@ class Marvin:
         # Prepare empty stubs
         self._on_startup = None
 
+        # Create access level dictionary
+        self.access_checker = dict()
+
         # Config Answer class
         Answer._load_defaults()
 
@@ -300,15 +303,62 @@ class Marvin:
         logger.info("Bot shuts down")
         quit(0)
 
-    @staticmethod
-    def before_processing(func: Callable):
+    def check_access_level(self, level: str):
         """
-        A decorator for a function, which shall be called before each message procession
-        :param func:
-        :return:
+        The wrapper for the inner decorator
+        :param level: The access level that is evaluated by the decorated function
+        :return: The decorator
         """
 
-        Marvin._before_function = func
+        def decorator(func: Callable):
+            """
+
+            :param func: The function to be registered
+            :return: The unchanged function
+            """
+
+            self.access_checker[level] = func
+
+            return func
+
+        return decorator
+
+    def access_level(self, *levels: str):
+        """
+        The wrapper for the inner decorator
+        :param levels: The access levels that grant permission for the decorated function.
+        :return: The decorator
+        """
+
+        def decorator(func: Callable, **kwargs: str):
+            """
+            Wrapper for the decorating function
+            :param func: The function to be protected
+            :return: The decorated function
+            """
+
+            async def inner():
+                """
+                Checks all given access levels and calls the given function if one of them evaluated to true
+                :return: The message handler usual output or None
+                """
+
+                # Iterate through all given levels
+                for level in levels:
+                    if self.access_checker.get(level, lambda: False)():
+
+                        # If one level evaluated to True, call the function as usual
+                        if iscoroutinefunction(func):
+                            return await func(**kwargs)
+                        else:
+                            return func(**kwargs)
+
+                # If no level evaluated to True, return nothing
+                return None
+
+            return inner
+
+        return decorator
 
     @staticmethod
     def _before_function():
@@ -850,6 +900,15 @@ class _Session(telepot.aio.helper.UserHandler):
             # Handle a single answer
             else:
                 await self.handle_answer([answer])
+
+        except IndexError:
+            err = '\n\tAn index error occured while preparing the answer.' \
+                  '\n\tLikely the answer is ill-formatted:\n\t\t{}'.format(str(answer))
+            logger.warning(log + err)
+
+            # Send error message, if configured
+            await self.handle_error()
+            return
 
         except FileNotFoundError as e:
             err = '\n\tThe request could not be fulfilled as the file "{}" could not be found'.format(e.filename)
