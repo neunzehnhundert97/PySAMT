@@ -730,6 +730,20 @@ class _Session(telepot.aio.helper.UserHandler):
         logger.info(
             "User {} connected".format(self.user))
 
+    def is_allowed(self):
+        """
+        Tests, if the current session's user is white listed
+        :return: If the user is allowed
+        """
+
+        ids = _config_value("general", "allowed_ids")
+
+        # If no IDs are defined, the user is allowed
+        if ids is None:
+            return True
+        else:
+            return self.user_id in ids
+
     async def on_close(self, timeout: int) -> None:
         """
         The function which will be called by telepot when the connection times out. Unused.
@@ -778,6 +792,9 @@ class _Session(telepot.aio.helper.UserHandler):
         The function which will be called by telepot
         :param msg: The received message as dictionary
         """
+
+        if not self.is_allowed():
+            return
 
         # Tests, if it is normal message or something special
         if 'text' in msg:
@@ -956,6 +973,9 @@ class _Session(telepot.aio.helper.UserHandler):
         Processes a sticker either by sending a default answer or extracting the corresponding emojis
         :param msg: The received message as dictionary
         """
+
+        if not self.is_allowed():
+            return
 
         # Extract the emojis associated with the sticker
         if _config_value('bot', 'extract_emojis', default=False):
