@@ -106,7 +106,7 @@ class Marvin:
         Answer._load_defaults()
 
         # Load database
-        _Session.database = TinyDB(_config_value('general', 'storage_file', default=False)) \
+        _Session.database = TinyDB(_config_value('general', 'storage_file', default="db.json")) \
             if _config_value('general', 'persistent_storage', default=False) else None
 
         # Initialize bot
