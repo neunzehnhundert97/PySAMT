@@ -105,6 +105,10 @@ class Marvin:
         # Config Answer class
         Answer._load_defaults()
 
+        # Load database
+        _Session.database = TinyDB(_config_value('general', 'storage_file', default=False)) \
+            if _config_value('general', 'persistent_storage', default=False) else None
+
         # Initialize bot
         self._create_bot()
         logger.info("Bot started")
@@ -302,6 +306,15 @@ class Marvin:
         Marvin._on_termination()
         logger.info("Bot shuts down")
         quit(0)
+
+    @staticmethod
+    def before_processing(func: Callable):
+        """
+        A decorator for a function, which shall be called before each message procession
+        :param func:
+        """
+
+        Marvin._before_function = func
 
     def check_access_level(self, level: str):
         """
@@ -716,7 +729,20 @@ class _Session(telepot.aio.helper.UserHandler):
         self.user = User(args[0][1]['from'])
 
         # Create dictionary to use as persistent storage
-        self.storage = dict()
+        # Load data from persistent storage
+        if _Session.database is not None:
+
+            self.storage = _Session.database.search(Query().user == self.user_id)
+
+            if len(self.storage) == 0:
+                _Session.database.insert({"user": self.user_id, "storage": {}})
+                self.storage = dict()
+            else:
+                self.storage = self.storage[0]["storage"]
+
+        else:
+            self.storage = dict()
+
         self.callback = None
         self.query_callback = {}
         self.query_id = None
@@ -893,6 +919,10 @@ class _Session(telepot.aio.helper.UserHandler):
         :param answer: The answer to be given
         :param log: A logging string
         """
+
+        # Syncs persistent storage
+        if _Session.database is not None:
+            _Session.database.update({"storage": self.storage}, Query().user == self.user_id)
 
         try:
 

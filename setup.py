@@ -17,6 +17,6 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="MIT",
-    install_requires=['toml', 'telepot', 'aiotask_context', 'parse'],
+    install_requires=['toml', 'telepot', 'aiotask_context', 'parse', 'tinydb'],
     url="https://github.com/neunzehnhundert97/marvin-telegram-bot"
 )
