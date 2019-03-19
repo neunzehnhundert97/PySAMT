@@ -106,8 +106,12 @@ class Marvin:
         Answer._load_defaults()
 
         # Load database
-        _Session.database = TinyDB(_config_value('general', 'storage_file', default="db.json")) \
-            if _config_value('general', 'persistent_storage', default=False) else None
+        if _config_value('general', 'persistent_storage', default=False):
+            name = _config_value('general', 'storage_file', default="db.json")
+            args = _config_value('general', 'storage_args', default=" ").split(" ")
+            _Session.database = self._initialize_persistent_storage(name, *args)
+        else:
+            _Session.database = None
 
         # Initialize bot
         self._create_bot()
@@ -175,6 +179,43 @@ class Marvin:
         fhandler.setFormatter(formatter)
         logger.addHandler(shandler)
         logger.addHandler(fhandler)
+
+    @staticmethod
+    def _initialize_persistent_storage(*args):
+        """
+        Creates the default database
+        :param args: The file name to be used
+        :return: The database connection
+        """
+        return TinyDB(args[0])
+
+    @staticmethod
+    def init_storage(func: Callable):
+        """
+        Decorator to replace the default persistent storage
+        :param func: The function which initializes the storage
+        :return: The unchanged function
+        """
+        Marvin._initialize_persistent_storage = func
+        return func
+
+    @staticmethod
+    def load_storage(func: Callable):
+        """
+        Decorator to replace the default load method for the persistent storage
+        :param func: The function which loads the user date
+        :return: The unchanged function
+        """
+        _Session.load_user_data = func
+
+    @staticmethod
+    def update_storage(func: Callable):
+        """
+        Decorator to replace the default update method for the persistent storage
+        :param func: The function which updates the user data
+        :return: The unchanged function
+        """
+        _Session.update_user_data = func
 
     @staticmethod
     def answer(message: str, mode: Mode = Mode.DEFAULT) -> Callable:
@@ -732,13 +773,7 @@ class _Session(telepot.aio.helper.UserHandler):
         # Load data from persistent storage
         if _Session.database is not None:
 
-            self.storage = _Session.database.search(Query().user == self.user_id)
-
-            if len(self.storage) == 0:
-                _Session.database.insert({"user": self.user_id, "storage": {}})
-                self.storage = dict()
-            else:
-                self.storage = self.storage[0]["storage"]
+            self.storage = _Session.load_user_data(self.user_id)
 
         else:
             self.storage = dict()
@@ -755,6 +790,33 @@ class _Session(telepot.aio.helper.UserHandler):
 
         logger.info(
             "User {} connected".format(self.user))
+
+    @staticmethod
+    def load_user_data(user):
+        """
+
+        :param user:
+        :return:
+        """
+
+        storage = _Session.database.search(Query().user == user)
+
+        if len(storage) == 0:
+            _Session.database.insert({"user": user, "storage": {}})
+            return dict()
+        else:
+            return storage[0]["storage"]
+
+    @staticmethod
+    def update_user_data(user, storage):
+        """
+
+        :param user:
+        :param storage:
+        :return:
+        """
+
+        _Session.database.update({"storage": storage}, Query().user == user)
 
     def is_allowed(self):
         """
@@ -922,7 +984,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Syncs persistent storage
         if _Session.database is not None:
-            _Session.database.update({"storage": self.storage}, Query().user == self.user_id)
+            _Session.update_user_data(self.user_id, self.storage)
 
         try:
 
@@ -966,9 +1028,15 @@ class _Session(telepot.aio.helper.UserHandler):
             return
 
         except TelegramError as e:
+            reason = e.args[0]
+
+            # Try to give a clearer error description
+            if reason == "Bad Request: chat not found":
+                reason = "The recipient has either not yet started communication with this bot or blocked it"
+
             err = '\n\tThe request could not be fulfilled as an API error occured:' \
                   '\n\t\t{}' \
-                  '\n\tNothing was returned to the user'.format(e.args[0])
+                  '\n\tNothing was returned to the user'.format(reason)
             logger.warning(log + err)
 
             # Send error message, if configured
