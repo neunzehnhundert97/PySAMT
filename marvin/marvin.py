@@ -863,13 +863,22 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Replace the query to prevent multiple activations
         if _config_value('query', 'replace_query', default=True):
+            # Get the last message
+            lastMessage: Answer = self.last_sent[0]
+            choices = lastMessage.choices
+
+            # Find the right replacement text
+            # This is either directly the received answer or the first element of the choice tuple
+            replacement = query['data'] if len(choices[0][0]) == 1 else next(
+                ([x[0] for x in row if x[1] == query['data']] for row in choices), None)[0]
+
+            # Edit the message
             await self.bot.editMessageText((self.user.id, query['message']['message_id']),
                                            # The message and chat ids are inquired in this way to prevent an error when
                                            # the user clicks on old queries
-                                           text=("{}\n<b>{}</b>" if self.last_sent[
-                                                                        0].markup == "HTML" else "{}\n**{}**").format(
-                                               query['message']['text'], query['data']),
-                                           parse_mode=self.last_sent[0].markup)
+                                           text=("{}\n<b>{}</b>" if lastMessage.markup == "HTML" else "{}\n**{}**")
+                                           .format(lastMessage.msg, replacement),
+                                           parse_mode=lastMessage.markup)
 
         # Process answer
         if answer is not None:
