@@ -1,11 +1,10 @@
 #!/bin/bash
-#FULLREBUILD="ja"
 
-
+FULLREBUILD="yes"
 
 docker container stop marvinbot
 docker container rm marvinbot
-if [ "$FULLREBUILD" = "ja" ];  then
+if [ "$FULLREBUILD" = "yes" ];  then
     echo You may go to the party.
     rm Marvin.zip
     rm -R marvin-telegram-bot-master/
