@@ -1,0 +1,7 @@
+[general]
+# Sets the log level for stdout
+logging = "DEBUG"
+
+[bot]
+# The Bot API token
+token = "The token you got by the botfather"
