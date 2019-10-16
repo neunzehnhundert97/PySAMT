@@ -1,0 +1,29 @@
+[general]
+# Sets the log level for stdout
+logging = "DEBUG"
+logfile = "Testbot.log"
+
+[bot]
+# The Bot API token
+#This is the one of the  @deineMuddaBot /KrassTestbot
+token = "311199215:AAHzUdqGee2m2NsyjsvQpvOvIQeMboG8CsA"
+# The markup you wish to use
+markup = "HTML"
+# The timeout for the users session to be discarded
+timeout = 31536000
+# Extract emojis from stickers to process them as text
+extract_emojis = true
+# Use the language sheets
+language_feature = true
+# Shall the program ignore small errors or let them terminate the application
+strict_mode = false
+# Let the bot mark the message he is answering to
+mark_as_answer = true
+# Default answer if an error occurs
+error_reply = "error"
+disable_web_preview = false
+disable_notification = false
+
+[query]
+# Replaces the answered queries
+replace_queries = true

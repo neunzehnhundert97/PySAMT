@@ -1,0 +1,10 @@
+[default]
+greeting = "Hello, dear {}"
+Test = "Test zurück"
+unknown = """{} habe ich leider nicht verstanden.
+          Probier doch mal \\"Key\\" oder \\"Key2\\" oder \\"rmKey\\""""
+error = "An error occured."
+
+[de]
+greeting = "Hallo, liebe/r {}"
+error = "Ein Fehler trat auf."

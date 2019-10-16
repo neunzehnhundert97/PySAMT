@@ -1,0 +1,16 @@
+[general]
+# Sets the log level for stdout
+logging = "DEBUG"
+logfile = "Testbot.log"
+
+[bot]
+# The Bot API token
+#This is the one of the  @deineMuddaBot /KrassTestbot
+token = "311199215:AAHzUdqGee2m2NsyjsvQpvOvIQeMboG8CsA"
+# The markup you wish to use
+markup = "HTML"
+
+
+[query]
+# Replaces the answered queries
+replace_queries = true
