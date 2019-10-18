@@ -5,8 +5,7 @@ logfile = "Testbot.log"
 
 [bot]
 # The Bot API token
-#This is the one of the  @deineMuddaBot /KrassTestbot
-token = "311199215:AAHzUdqGee2m2NsyjsvQpvOvIQeMboG8CsA"
+token = "The token you got by the botfather"
 
 
 # Use the language sheets
