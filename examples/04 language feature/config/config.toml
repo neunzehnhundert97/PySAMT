@@ -4,7 +4,7 @@ logging = "DEBUG"
 
 [bot]
 # The Bot API token
-token = "Your bot token"
+token = "The token you got by the botfather"
 # The markup to use [HTML or Markdown]
 markup = "HTML"
 # Use the language sheets
