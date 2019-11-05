@@ -1,9 +1,0 @@
-[default]
-greeting = "Hello, dear {}"
-Test = "Test zurück"
-unknown = "{} habe ich leider nicht verstanden."
-error = "An error occured."
-
-[de]
-greeting = "Hallo, liebe/r {}"
-error = "Ein Fehler trat auf."
