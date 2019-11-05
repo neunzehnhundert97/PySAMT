@@ -1,5 +1,6 @@
 from pathlib import Path
 from os import chdir, system
+import os
 from shutil import copyfile
 
 config_template = """[general]
@@ -85,7 +86,7 @@ def create(folder: Path, name: str, api_key: str):
         f.write(bot_template)
         
     # Create the bot's file
-    run_file = folder / "run.bat"
+    run_file = folder / ("run.bat" if os.name == "nt" else "run.sh")
     run_file.touch()
     
     with open(run_file, "w") as f:
