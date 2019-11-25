@@ -13,9 +13,9 @@ token = "{}"
 
 """
 
-bot_template = """from marvin import Marvin, Context
+bot_template = """from samt import Bot, Context
 
-bot = Marvin()
+bot = Bot()
 
 
 @bot.default_answer
@@ -52,7 +52,7 @@ def main():
         
     print("Please enter your bot's name.")
     print("This will only be used to create the container.")
-    name = (input("Name [marvin-bot]: ") or "marvin-bot").lower()
+    name = (input("Name [samt-bot]: ") or "samt-bot").lower()
     print()
     
     print("Please choose a destination for the bot's files.")

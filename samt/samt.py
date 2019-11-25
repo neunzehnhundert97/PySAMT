@@ -21,7 +21,7 @@ from telepot.exception import TelegramError
 from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
     ReplyKeyboardRemove
 
-from marvin.helper import *
+from samt.helper import *
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,7 @@ def _config_value(*keys, default: Any = None) -> Any:
     return step
 
 
-# noinspection PyProtectedMember
-class Marvin:
+class Bot:
     """
     The main class of this framework
     """
@@ -94,7 +93,7 @@ class Marvin:
                                 "lang.toml in the directory config or disable this feature.")
                 quit(-1)
 
-        signal.signal(signal.SIGINT, Marvin.signal_handler)
+        signal.signal(signal.SIGINT, Bot.signal_handler)
 
         # Prepare empty stubs
         self._on_startup = None
@@ -196,7 +195,7 @@ class Marvin:
         :param func: The function which initializes the storage
         :return: The unchanged function
         """
-        Marvin._initialize_persistent_storage = func
+        Bot._initialize_persistent_storage = func
         return func
 
     @staticmethod
@@ -344,7 +343,7 @@ class Marvin:
         A signal handler to catch a termination via CTR-C
         """
 
-        Marvin._on_termination()
+        Bot._on_termination()
         logger.info("Bot shuts down")
         quit(0)
 
@@ -355,7 +354,7 @@ class Marvin:
         :param func:
         """
 
-        Marvin._before_function = func
+        Bot._before_function = func
 
     def check_access_level(self, level: str):
         """
@@ -496,7 +495,7 @@ class Answer(object):
 
         # Catch a to long message text
         if self.media_type == Media.TEXT and len(msg) > 4096:
-            msg, self.media_type, self.media = Marvin._on_message_overflow(self)
+            msg, self.media_type, self.media = Bot._on_message_overflow(self)
 
         # Check for a request for editing
         if self.edit_id is not None:
@@ -914,7 +913,7 @@ class _Session(telepot.aio.helper.UserHandler):
         _context.set('_<[storage]>_', self.storage)
 
         # Calls the preprocessing function
-        if not Marvin._before_function():
+        if not Bot._before_function():
             return
 
         args: Tuple = ()

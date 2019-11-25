@@ -4,10 +4,10 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="marvin",
+    name="samt",
     version=0.3,
     author="neunzehnhundert97",
-    packages=["marvin"],
+    packages=["samt"],
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "License :: OSI Approved :: MIT License",
@@ -18,5 +18,5 @@ setup(
     long_description_content_type="text/markdown",
     license="MIT",
     install_requires=['toml', 'telepot', 'aiotask_context', 'parse', 'tinydb'],
-    url="https://github.com/neunzehnhundert97/marvin-telegram-bot"
+    url="https://github.com/neunzehnhundert97/SAMT"
 )

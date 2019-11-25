@@ -7,8 +7,8 @@ RUN apk add --no-cache git
 # Update pip to the newest version
 RUN pip3 install --upgrade pip
 
-# Install marvin
-RUN pip3 install git+https://github.com/neunzehnhundert97/marvin-telegram-bot
+# Install samt
+RUN pip3 install git+https://github.com/neunzehnhundert97/samt
 
 # Set the working directory to /app
 WORKDIR /app

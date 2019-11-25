@@ -1,8 +1,8 @@
 import asyncio
 
-from marvin import Marvin, Answer, Context, Mode
+from samt import Bot, Answer, Context, Mode
 
-marv = Marvin()
+marv = Bot()
 
 
 @marv.default_answer
