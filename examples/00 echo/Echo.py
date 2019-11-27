@@ -1,6 +1,6 @@
-from marvin import Marvin, Context
+from samt import Bot, Context
 
-bot = Marvin()
+bot = Bot()
 
 
 @bot.default_answer

@@ -1,8 +1,8 @@
 import asyncio
 
-from marvin import Marvin, Answer, Context, Mode
+from samt import Bot, Answer, Context, Mode
 
-marv = Marvin()
+marv = Bot()
 
 #Put here Your Own TelegramID
 # It can be a string or an int
@@ -17,7 +17,7 @@ async def testLoop():
     while True:
         #Define a message that we want to send
         a=Answer('greeting', "user", receiver=userID)
-        # yield it to marvin
+        # yield it to samt
         yield a
         #wait 10 seconds
         await asyncio.sleep(10)

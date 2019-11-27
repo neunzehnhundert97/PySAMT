@@ -1,4 +1,4 @@
-# Marvin
+# SAMT
 
 This framework on top of [telepot](https://github.com/nickoala/telepot) is intended to ease the creation of simple Telegram chat bots. With a syntax as seen in web frameworks like [flask](https://github.com/pallets/flask), writing the bot will only be about defining what the bot will answer to certain messages, skipping the lower levels involved.
 
@@ -7,9 +7,9 @@ This framework on top of [telepot](https://github.com/nickoala/telepot) is inten
 Bot.py
 
 ```python
-from marvin import Marvin
+from samt import Bot
 
-bot = Marvin()
+bot = Bot()
 
 @bot.answer("/start")
 def start():

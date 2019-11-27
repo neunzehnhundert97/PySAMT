@@ -1,6 +1,6 @@
-from marvin import Marvin
+from samt import Bot
 
-bot = Marvin()
+bot = Bot()
 
 
 @bot.default_answer
