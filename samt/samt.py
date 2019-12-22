@@ -383,14 +383,14 @@ class Bot:
         :return: The decorator
         """
 
-        def decorator(func: Callable, **kwargs: str):
+        def decorator(func: Callable):
             """
             Wrapper for the decorating function
             :param func: The function to be protected
             :return: The decorated function
             """
 
-            async def inner():
+            async def inner(**kwargs):
                 """
                 Checks all given access levels and calls the given function if one of them evaluated to true
                 :return: The message handler usual output or None
