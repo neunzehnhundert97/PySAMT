@@ -887,22 +887,9 @@ class _Session(telepot.aio.helper.UserHandler):
         # (The waiting circle in the user's application will disappear)
         await self.bot.answerCallbackQuery(query['id'])
 
-        # Get the last message
-        lastMessage: Answer = self.last_sent[0]
-
-        # Look for a matching callback and execute it
-        answer = None
-        func = self.query_callback.pop(query['message']['message_id'], None)
-        if func is not None:
-            if iscoroutinefunction(func):
-                answer = await func(query['data'])
-            else:
-                answer = func(query['data'])
-        elif self.gen is not None:
-            await self.handle_generator(msg=query['data'])
-
         # Replace the query to prevent multiple activations
         if _config_value('query', 'replace_query', default=True):
+            lastMessage: Answer = self.last_sent[0]
             choices = lastMessage.choices
 
             # Find the right replacement text
@@ -917,6 +904,17 @@ class _Session(telepot.aio.helper.UserHandler):
                                            text=("{}\n<b>{}</b>" if lastMessage.markup == "HTML" else "{}\n**{}**")
                                            .format(lastMessage.msg, replacement),
                                            parse_mode=lastMessage.markup)
+
+        # Look for a matching callback and execute it
+        answer = None
+        func = self.query_callback.pop(query['message']['message_id'], None)
+        if func is not None:
+            if iscoroutinefunction(func):
+                answer = await func(query['data'])
+            else:
+                answer = func(query['data'])
+        elif self.gen is not None:
+            await self.handle_generator(msg=query['data'])
 
         # Process answer
         if answer is not None:
@@ -978,7 +976,7 @@ class _Session(telepot.aio.helper.UserHandler):
         if self.callback is not None:
             func = self.callback
             self.callback = None
-            args = [text]
+            args = tuple(text)
 
         # Check, if the message is covered by one of the known simple routes
         elif text in _Session.simple_routes:
