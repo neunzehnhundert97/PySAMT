@@ -393,7 +393,7 @@ class Bot:
             async def inner(**kwargs):
                 """
                 Checks all given access levels and calls the given function if one of them evaluated to true
-                :return: The message handler usual output or None
+                :return: The message handler's usual output or None
                 """
 
                 # Iterate through all given levels
@@ -408,6 +408,44 @@ class Bot:
 
                 # If no level evaluated to True, return nothing
                 return None
+
+            return inner
+
+        return decorator
+
+    def ensure_parameter(self, name: str, phrase: str, choices: Collection[str] = None):
+        """
+        The wrapper for the inner decorator
+        :param name: The name of the parameter to provide
+        :param phrase: The phrase to use when asking the user for the parameter
+        :param choices: The choices to show the user as callback
+        :return: The decorator
+        """
+
+        def decorator(func: Callable):
+            """
+            Wrapper for the decorating function
+            :param func: The function to be protected
+            :return: The decorated function
+            """
+
+            async def inner(**kwargs):
+                """
+                Checks if the requested parameter exists and aks the user to provide it, if it misses
+                :return: The message handler's usual output
+                """
+
+                # Check if the parameter exists
+                if name not in kwargs:
+                    # If not, ask the user for it
+                    temp = (yield Answer(phrase, choices=choices))
+                    kwargs[name] = temp
+
+                # If one level evaluated to True, call the function as usual
+                if iscoroutinefunction(func):
+                    yield await func(**kwargs)
+                else:
+                    yield func(**kwargs)
 
             return inner
 
