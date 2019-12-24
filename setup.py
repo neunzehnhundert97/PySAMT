@@ -20,6 +20,6 @@ setup(
     extras_require={
         "Easy parsing": ["parse"],
         "Persistent storage": ["tinydb"]
-    }
+    },
     url="https://github.com/neunzehnhundert97/SAMT"
 )
