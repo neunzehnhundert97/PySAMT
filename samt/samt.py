@@ -887,6 +887,9 @@ class _Session(telepot.aio.helper.UserHandler):
         # (The waiting circle in the user's application will disappear)
         await self.bot.answerCallbackQuery(query['id'])
 
+        # Get the last message
+        lastMessage: Answer = self.last_sent[0]
+
         # Look for a matching callback and execute it
         answer = None
         func = self.query_callback.pop(query['message']['message_id'], None)
@@ -900,8 +903,6 @@ class _Session(telepot.aio.helper.UserHandler):
 
         # Replace the query to prevent multiple activations
         if _config_value('query', 'replace_query', default=True):
-            # Get the last message
-            lastMessage: Answer = self.last_sent[0]
             choices = lastMessage.choices
 
             # Find the right replacement text
