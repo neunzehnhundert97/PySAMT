@@ -757,7 +757,7 @@ class Answer(object):
 
         return {
             'parse_mode': self.markup,
-            'reply_to_message_id': _context.get('message').id if self.mark_as_answer and _context.get(
+            'reply_to_message_id': _context.get('init_message').id if self.mark_as_answer and _context.get(
                 'message') is not None else None,
             'disable_web_page_preview': self.disable_web_preview,
             'disable_notification': self.disable_notification,
@@ -950,6 +950,11 @@ class _Session(telepot.aio.helper.UserHandler):
         _context.set('user', self.user)
         _context.set('message', Message(msg))
         _context.set('_<[storage]>_', self.storage)
+
+        # If there is currently no generator ongoing, save this message additionally as init
+        # This may be of use when inside a generator the starting message is needed
+        if self.gen is None:
+            _context.set("init_message", Message(msg))
 
         # Calls the preprocessing function
         if not Bot._before_function():
