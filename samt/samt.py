@@ -907,7 +907,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # Find the right replacement text
             # This is either directly the received answer or the first element of the choice tuple
-            replacement = query['data'] if len(choices[0][0]) == 1 else next(
+            replacement = query['data'] if not isinstance(choices[0][0], tuple) or len(choices[0][0]) == 1 else next(
                 ([x[0] for x in row if x[1] == query['data']] for row in choices), None)[0]
 
             # Edit the message
