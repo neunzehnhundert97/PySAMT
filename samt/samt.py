@@ -173,7 +173,7 @@ class Bot:
         shandler = logging.StreamHandler()
         fhandler = logging.FileHandler(
             f"{path.dirname(path.realpath(sys.argv[0]))}/{_config_value('general', 'logfile', default='Bot.log')}")
-        formatter = logging.Formatter("[%(asctime)s] %(message)s", "%X")
+        formatter = logging.Formatter("[%(asctime)s] %(message)s", "%x %X")
         shandler.setFormatter(formatter)
         fhandler.setFormatter(formatter)
         logger.addHandler(shandler)
@@ -1040,7 +1040,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # None as return will result in no answer being sent
             if answer is None:
-                logger.info(log + "\nNo answer was given")
+                logger.info(log + "\n\tNo answer was given")
                 return
 
             # Handle multiple strings or answers as return
