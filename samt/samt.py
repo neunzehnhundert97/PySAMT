@@ -173,7 +173,7 @@ class Bot:
         shandler = logging.StreamHandler()
         fhandler = logging.FileHandler(
             f"{path.dirname(path.realpath(sys.argv[0]))}/{_config_value('general', 'logfile', default='Bot.log')}")
-        formatter = logging.Formatter("[%(asctime)s] %(message)s", "%X")
+        formatter = logging.Formatter("[%(asctime)s] %(message)s", "%x %X")
         shandler.setFormatter(formatter)
         fhandler.setFormatter(formatter)
         logger.addHandler(shandler)
@@ -383,17 +383,17 @@ class Bot:
         :return: The decorator
         """
 
-        def decorator(func: Callable, **kwargs: str):
+        def decorator(func: Callable):
             """
             Wrapper for the decorating function
             :param func: The function to be protected
             :return: The decorated function
             """
 
-            async def inner():
+            async def inner(**kwargs):
                 """
                 Checks all given access levels and calls the given function if one of them evaluated to true
-                :return: The message handler usual output or None
+                :return: The message handler's usual output or None
                 """
 
                 # Iterate through all given levels
@@ -408,6 +408,44 @@ class Bot:
 
                 # If no level evaluated to True, return nothing
                 return None
+
+            return inner
+
+        return decorator
+
+    def ensure_parameter(self, name: str, phrase: str, choices: Collection[str] = None):
+        """
+        The wrapper for the inner decorator
+        :param name: The name of the parameter to provide
+        :param phrase: The phrase to use when asking the user for the parameter
+        :param choices: The choices to show the user as callback
+        :return: The decorator
+        """
+
+        def decorator(func: Callable):
+            """
+            Wrapper for the decorating function
+            :param func: The function to be protected
+            :return: The decorated function
+            """
+
+            async def inner(**kwargs):
+                """
+                Checks if the requested parameter exists and aks the user to provide it, if it misses
+                :return: The message handler's usual output
+                """
+
+                # Check if the parameter exists
+                if name not in kwargs:
+                    # If not, ask the user for it
+                    temp = (yield Answer(phrase, choices=choices))
+                    kwargs[name] = temp
+
+                # If one level evaluated to True, call the function as usual
+                if iscoroutinefunction(func):
+                    yield await func(**kwargs)
+                else:
+                    yield func(**kwargs)
 
             return inner
 
@@ -719,7 +757,7 @@ class Answer(object):
 
         return {
             'parse_mode': self.markup,
-            'reply_to_message_id': _context.get('message').id if self.mark_as_answer and _context.get(
+            'reply_to_message_id': _context.get('init_message').id if self.mark_as_answer and _context.get(
                 'message') is not None else None,
             'disable_web_page_preview': self.disable_web_preview,
             'disable_notification': self.disable_notification,
@@ -849,6 +887,24 @@ class _Session(telepot.aio.helper.UserHandler):
         # (The waiting circle in the user's application will disappear)
         await self.bot.answerCallbackQuery(query['id'])
 
+        # Replace the query to prevent multiple activations
+        if _config_value('query', 'replace_query', default=True):
+            lastMessage: Answer = self.last_sent[0]
+            choices = lastMessage.choices
+
+            # Find the right replacement text
+            # This is either directly the received answer or the first element of the choice tuple
+            replacement = query['data'] if not isinstance(choices[0][0], tuple) or len(choices[0][0]) == 1 else next(
+                ([x[0] for x in row if x[1] == query['data']] for row in choices), None)[0]
+
+            # Edit the message
+            await self.bot.editMessageText((self.user.id, query['message']['message_id']),
+                                           # The message and chat ids are inquired in this way to prevent an error when
+                                           # the user clicks on old queries
+                                           text=("{}\n<b>{}</b>" if lastMessage.markup == "HTML" else "{}\n**{}**")
+                                           .format(lastMessage.msg, replacement),
+                                           parse_mode=lastMessage.markup)
+
         # Look for a matching callback and execute it
         answer = None
         func = self.query_callback.pop(query['message']['message_id'], None)
@@ -859,25 +915,6 @@ class _Session(telepot.aio.helper.UserHandler):
                 answer = func(query['data'])
         elif self.gen is not None:
             await self.handle_generator(msg=query['data'])
-
-        # Replace the query to prevent multiple activations
-        if _config_value('query', 'replace_query', default=True):
-            # Get the last message
-            lastMessage: Answer = self.last_sent[0]
-            choices = lastMessage.choices
-
-            # Find the right replacement text
-            # This is either directly the received answer or the first element of the choice tuple
-            replacement = query['data'] if len(choices[0][0]) == 1 else next(
-                ([x[0] for x in row if x[1] == query['data']] for row in choices), None)[0]
-
-            # Edit the message
-            await self.bot.editMessageText((self.user.id, query['message']['message_id']),
-                                           # The message and chat ids are inquired in this way to prevent an error when
-                                           # the user clicks on old queries
-                                           text=("{}\n<b>{}</b>" if lastMessage.markup == "HTML" else "{}\n**{}**")
-                                           .format(lastMessage.msg, replacement),
-                                           parse_mode=lastMessage.markup)
 
         # Process answer
         if answer is not None:
@@ -912,6 +949,11 @@ class _Session(telepot.aio.helper.UserHandler):
         _context.set('message', Message(msg))
         _context.set('_<[storage]>_', self.storage)
 
+        # If there is currently no generator ongoing, save this message additionally as init
+        # This may be of use when inside a generator the starting message is needed
+        if self.gen is None:
+            _context.set("init_message", Message(msg))
+
         # Calls the preprocessing function
         if not Bot._before_function():
             return
@@ -934,7 +976,7 @@ class _Session(telepot.aio.helper.UserHandler):
         if self.callback is not None:
             func = self.callback
             self.callback = None
-            args = [text]
+            args = tuple(text)
 
         # Check, if the message is covered by one of the known simple routes
         elif text in _Session.simple_routes:
@@ -998,7 +1040,7 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # None as return will result in no answer being sent
             if answer is None:
-                logger.info(log + "\nNo answer was given")
+                logger.info(log + "\n\tNo answer was given")
                 return
 
             # Handle multiple strings or answers as return
