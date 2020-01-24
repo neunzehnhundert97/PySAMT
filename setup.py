@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="MIT",
-    install_requires=['toml', 'telepot', 'aiotask_context'],
+    install_requires=['toml', 'telepot', 'aiotask_context', 'more-itertools'],
     extras_require={
         "Easy parsing": ["parse"],
         "Persistent storage": ["tinydb"]
