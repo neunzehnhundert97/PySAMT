@@ -20,6 +20,7 @@ from telepot.aio.loop import MessageLoop
 from telepot.exception import TelegramError
 from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, \
     ReplyKeyboardRemove
+from more_itertools import flatten, first_true
 
 from samt.helper import *
 
@@ -894,8 +895,12 @@ class _Session(telepot.aio.helper.UserHandler):
 
             # Find the right replacement text
             # This is either directly the received answer or the first element of the choice tuple
-            replacement = query['data'] if not isinstance(choices[0][0], tuple) or len(choices[0][0]) == 1 else next(
-                ([x[0] for x in row if str(x[1]) == query['data']] for row in choices), None)[0]
+            if not isinstance(choices[0][0], tuple) or len(choices[0][0]) == 1:
+                replacement = query['data']
+            else:
+                # Flatten the choices to a list containing the tuples
+                choices = flatten(choices)
+                replacement = first_true(choices, pred=lambda x: str(x[1]) == query['data'], default=("", ""))[0]
 
             # Edit the message
             await self.bot.editMessageText((self.user.id, query['message']['message_id']),
