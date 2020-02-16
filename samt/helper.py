@@ -241,3 +241,7 @@ class Media(Enum):
 
     DOCUMENT = 6
     """Any file for download"""
+
+
+class AuthorizationError(Exception):
+    pass

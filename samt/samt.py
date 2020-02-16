@@ -407,8 +407,8 @@ class Bot:
                         else:
                             return func(**kwargs)
 
-                # If no level evaluated to True, return nothing
-                return None
+                # If no level evaluated to True, raise error
+                raise AuthorizationError()
 
             return inner
 
@@ -1011,6 +1011,17 @@ class _Session(telepot.aio.helper.UserHandler):
             else:
                 answer = func(*args, **kwargs)
 
+        # Catch an error due to lacking authorization
+        except AuthorizationError:
+            # Get the configuration value
+            reply = _config_value('bot', 'authorization_reply', default=None)
+            logger.info("User's request was blocked due to insufficient access permissions.")
+
+            # If an answer is configured, an reply is sent, else nothing is returned
+            if reply is not None:
+                await self.prepare_answer(Answer(_config_value('bot', 'authorization_reply', default=None)))
+
+        # Catch any error
         except Exception as e:
 
             # Depending of the exceptions type, the specific message is on a different index
