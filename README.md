@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
 ```
 
-config/Configuration.toml
+config/config.toml
 
 ```ini
 [general]
