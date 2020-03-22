@@ -6,7 +6,7 @@ marv = Bot()
 
 #Put here Your Own TelegramID
 # It can be a string or an int
-userID=22237162
+userID=0
 
 @marv.answer("/start")
 async def start():
