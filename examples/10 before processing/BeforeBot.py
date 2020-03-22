@@ -5,7 +5,7 @@ from samt import Bot, Answer, Context, Mode
 marv = Bot()
 
 #Put here Your Own TelegramID
-userID=222371620
+userID=0
 
 @marv.default_answer
 def default():
