@@ -9,3 +9,6 @@ The following examples are currently available:
 * **Hello:** A bot who will greet the user when first connecting. It will ignore all other messages.
 * **Media:** A bot capable of sending files and stickers.
 * **Parsing:** A bot which can perform more complex matchings on incoming messages
+
+# Bots done with this Framework
+* [Youtube Download](https://github.com/Killerhaschen/TelegramYtDl)
