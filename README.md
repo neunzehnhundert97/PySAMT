@@ -1,5 +1,7 @@
 # SAMT
 
+**Warning: The underlying library telepot is discontinued, so SAMT fails when features like polls are used!**
+
 This framework on top of [telepot](https://github.com/nickoala/telepot) is intended to ease the creation of simple Telegram chat bots. With a syntax as seen in web frameworks like [flask](https://github.com/pallets/flask), writing the bot will only be about defining what the bot will answer to certain messages, skipping the lower levels involved.
 
 ## A simple example
